@@ -1,0 +1,11 @@
+# Phase-1 evaluation checklist
+
+1. Confirm complete status, expected frames (150/175), matching source/model hashes, inference settings, package versions, hardware and storage. Check ReID/GMC and algorithm-specific thresholds; note TrackTrack candidate recovery. Treat resolution changes as separate experiments.
+2. Watch overlays slowly. Mark missed players, duplicate boxes, referee/crowd false positives and occlusions by graphics. Compare raw detections with tracks to distinguish detector failures from association/confirmation omissions.
+3. Label visible players on frames 0, 25, 50, 75, 100, 125 and final frame, plus frames around crowded crossings. Record `video,frame_idx,gt_person_id,x1,y1,x2,y2,role,visibility`. Use explicit referee/crowd/ignore labels and consistent partial-visibility rules. Use identical annotations for both trackers.
+4. Match boxes one-to-one at IoU >= 0.5. Report TP, FP, FN, precision TP/(TP+FP) and recall TP/(TP+FN), per clip, with sample counts and ignored-region policy. Empty denominators are unknown. These are sampled-frame metrics, not whole-clip mAP.
+5. Label a contiguous interval, ideally the full short clips, with persistent manual player IDs. Sparse samples miss switches. Count switches when a matched tracker ID changes for the same known player; fragmentation is tracked/untracked/tracked while still visible. Record `video,frame_idx,gt_person_id,event,old_track_id,new_track_id,note`. Report uncertain/excluded events instead of guessing identity after unobservable exits/reentries.
+6. Compare processing time and pipeline FPS with first-call warmup, hardware and storage recorded. Drive I/O matters. Unique ID count is a diagnostic, not a switch count. Repeat timing only if anomalies or meaningful speed differences warrant it.
+7. Summarize per clip: tracker/settings, labeled frames/players, TP/FP/FN, precision/recall, switches, fragmentation, processing seconds and FPS. Accuracy cells remain null until annotated. HOTA/IDF1 need appropriate contiguous GT and a validated evaluator; defer them for now.
+
+Choose the next change from measured failures: player filtering, resolution or threshold sweep, or identity work. Attractive overlays alone do not validate accuracy, court mapping or tactics.

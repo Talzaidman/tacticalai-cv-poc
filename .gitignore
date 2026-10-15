@@ -1,0 +1,27 @@
+# Source videos / potentially proprietary inputs
+/data/raw/
+*.mp4
+*.mov
+*.avi
+# Runtime products
+/outputs/
+*.pt
+*.onnx
+*.engine
+*.torchscript
+# Local Python and notebook artifacts
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+.env
+.env.*
+*.egg-info/
+# Generated notebook/cache files
+.cache/
+runs/
+.inspection-deps/
+/tmp/
+*.zip
+*.pth
+.vscode/settings.json

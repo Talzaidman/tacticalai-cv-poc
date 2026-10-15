@@ -1,0 +1,8 @@
+# Direct runtime dependencies pinned; keep Colab's CUDA-compatible torch/torchvision.
+# Every run records pip freeze, including their exact installed versions.
+setuptools==75.8.0
+ultralytics==8.4.158
+opencv-python==4.12.0.88
+numpy==2.2.6
+PyYAML==6.0.2
+lap==0.5.12

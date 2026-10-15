@@ -1,0 +1,13 @@
+{
+  "model": "yolo26s.pt",
+  "conf": 0.1,
+  "iou": 0.7,
+  "imgsz": 1280,
+  "max_det": 100,
+  "device": "0",
+  "half": false,
+  "seed": 0,
+  "trackers": ["botsort", "tracktrack"],
+  "with_reid": false,
+  "gmc_method": "sparseOptFlow"
+}
