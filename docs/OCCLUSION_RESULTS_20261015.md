@@ -73,3 +73,30 @@ these failure events are labeled. No off-screen/hidden positions were measured.
 
 Comparison layout: baseline top left, buffer60 top right, ReID bottom left,
 buffer60+ReID bottom right. IDs are local to each run.
+
+## Verified clip 1 event: 87 to 96 (follow-up inspection)
+
+The user identified the yellow-shirted player starting as ID 87 and ending as
+ID 96 in TrackTrack+ReID. Inspection of raw footage with exported boxes confirms
+a wrong-person association: ID 96 already belonged to a dark-clothed sideline
+person, before being assigned to the yellow-shirted player.
+
+- Frame 104 (4.16 s): last exported observation of player track 87; ID 96 is
+  simultaneously attached to the sideline person.
+- Frame 130 (5.20 s): ID 96 remains on the sideline person.
+- Frame 131 (5.24 s): ID 96 changes to a box on the yellow-shirted player and
+  continues following that player through the end of the clip.
+
+The interval from the last track-87 observation to the erroneous player match
+is 27 frame intervals, or 1.08 s, within the 30-frame retention setting. ID 96
+was not newly created at that moment. Retention expiry alone therefore does
+not explain this event. Buffer60+ReID has identical output and the same failure.
+The event establishes at least one identity-association failure, but not a
+whole-clip ID-switch metric. Exact internal appearance/motion cost contributions
+have not been logged or determined.
+
+Visual evidence is saved locally as
+`outputs/occlusion-20261015T204150Z-029a7a35/id87-to96-evidence.jpg`.
+This motivates testing conservative court/role filtering before association
+and rejecting cross-role matches, while also inspecting why the original
+player track failed to reconnect. These changes are proposed, not validated.

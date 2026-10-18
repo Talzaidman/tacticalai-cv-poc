@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "status": "draft",
+  "video": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 25.0,
+    "frames": 175,
+    "sha256": "a23b63a847634602f2507e1a0300d045e2db9f4f16373de6e3f34524429d7e96"
+  },
+  "court": {
+    "length_m": 28.0,
+    "width_m": 15.0,
+    "key_depth_m": 5.8,
+    "key_width_m": 4.9,
+    "assumption": "FIBA-style nominal dimensions; verify venue. Line-centre approximation.",
+    "reference": "https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2024-v10a.pdf",
+    "three_point_corner_offset_m": 0.9
+  },
+  "orientation": "x along court, y far to near; diagram left/right unrelated to image left/right",
+  "ransac_threshold_px": 4.0,
+  "max_interpolation_gap_frames": 0,
+  "keyframes": [
+    {
+      "frame_idx": 0,
+      "interpolate_to_next": false,
+      "anchors": {
+        "left_three_base_far": {
+          "image_xy": [
+            632,
+            534
+          ],
+          "use": "fit"
+        },
+        "left_key_base_near": {
+          "image_xy": [
+            258,
+            772
+          ],
+          "use": "fit"
+        },
+        "left_key_free_far": {
+          "image_xy": [
+            1076,
+            673
+          ],
+          "use": "fit"
+        },
+        "left_key_free_near": {
+          "image_xy": [
+            947,
+            814
+          ],
+          "use": "fit"
+        },
+        "left_three_base_near": {
+          "image_xy": [
+            3,
+            941
+          ],
+          "use": "check"
+        }
+      }
+    }
+  ],
+  "notes": "Initial visual click estimates by Codex on original frame 0. Unreviewed manual calibration; nominal FIBA-style dimensions, not a venue survey. Left baseline in court coordinates is the basket at image left. Camera pans later; this mapping applies only to frame 0."
+}

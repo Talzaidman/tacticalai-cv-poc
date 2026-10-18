@@ -25,3 +25,7 @@ runs/
 *.zip
 *.pth
 .vscode/settings.json
+# Backups from the local manual-anchor editor
+/configs/calibration/*.bak.json
+# Downloaded model assets and upstream model source (provenance saved per run)
+/models/

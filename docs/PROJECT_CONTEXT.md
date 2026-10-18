@@ -2,6 +2,84 @@
 
 _Compiled from a ChatGPT discussion on 2026-10-15 for continuation in Codex in VS Code._
 
+**Current continuation status (2026-10-18):** The homography/projection benchmark
+on branch `homography` is concluded at the user's request. The user accepted
+the smoothed two-clip presentation as the current visual POC checkpoint. This
+is visual acceptance, not verified calibration/player accuracy or completion
+of every requirement in the original brief. Preserve the delivered artifacts
+and configurations; further experiments belong to the future-work backlog.
+The original handoff in sections 1–10 below remains historical.
+
+## 0. Completed checkpoint and future research
+
+### Current deliverable and working pipeline
+
+- Open `outputs/challenge-player-smoothed-v1/index.html` locally for both full
+  clips, player track boxes, colored track IDs and the top-left projected
+  mini-map. It includes original/smoothed switching, frame-synchronized
+  side-by-side comparison, slow motion and fullscreen playback.
+- Tracking remains the existing YOLO26s / TrackTrack + ReID
+  (`yolo26n-cls.pt`), buffer 30, GMC `sparseOptFlow`. No player inference was
+  rerun during geometry/smoothing work. This is the development candidate,
+  not an accuracy winner. Known wrong-person matches and duplicate/fragmented
+  IDs remain, including clip 1's player 87 taking sideline-person ID 96.
+- Automatic calibration uses KaliCalib's **challenge checkpoint**, with the
+  published winning-channel centroid extraction, 35 px RANSAC at 960×540,
+  and camera refinement. The challenge checkpoint was better on the sampled
+  review frames than the test checkpoint. Failed estimates use null, not the
+  upstream fixed mean-camera fallback. The first YOLO court model and custom
+  strict calibration baseline were insufficient; simple yellow-line refinement
+  was also unreliable (only 2/30 corrections accepted in its second iteration).
+- Stabilization uses robust constant-velocity Kalman filtering plus an offline
+  RTS backward pass. It smooths court positions of nine fixed image probes,
+  refits homographies, and then lightly filters contiguous observed player
+  track segments. It never averages homography coefficients, joins IDs, or
+  fills missing player detections. Short supported camera gaps, up to five
+  frames, are explicitly labelled estimated. Camera-cut boundaries reset filters.
+- Both clips retain all 150/175 frames at 25 FPS. The raw challenge model
+  supplied camera estimates on 150/168 frames. The smoothed presentation has
+  supported camera estimates on 150/175 frames, including 15 explicitly estimated
+  clip 2 frames (eight rejected outliers plus seven original gaps). All
+  1,358/1,894 original person-track observations are retained. Role filtering is
+  sampled **manual annotation**, not an automatic player/referee classifier.
+- The median projected-player second-difference roughness fell approximately
+  98% on matched observed triples. This is a smoothness proxy, not accuracy.
+  Draft-click agreement improved slightly on clip 1 but worsened slightly at
+  clip 2's only checked frame; a smooth projection can still be wrong.
+- All 31 CPU tests passed; full MP4 decode/frame counts, displayed populations,
+  unchanged IDs/roles/boxes, raw coordinate preservation and estimated-position
+  labels were checked. These are software/artifact checks, not ground-truth
+  validation. Playback at 25 FPS is not processing at 25 FPS.
+
+Detailed records and reproduction:
+[manual geometry](HOMOGRAPHY.md),
+[automatic baseline](AUTOMATIC_HOMOGRAPHY_20261018.md),
+[checkpoint/refinement comparison](KALICALIB_REFERENCE_20261018.md),
+[full challenge presentation](CHALLENGE_PRESENTATION.md), and
+[temporal smoothing](PROJECTION_SMOOTHING.md).
+The unsmoothed reference remains at
+`outputs/challenge-player-presentation-v1/index.html`. Source footage and prior
+experiments remain unchanged; model assets and output videos stay Git-ignored.
+
+### Prioritized improvements and necessary research
+
+| Priority | Research / improvement | Next investigation and evidence required |
+|---|---|---|
+| First | Independent calibration and player-position evaluation | Annotate visible floor landmarks and player foot-contact points across both clips, including pans, occlusions and difficult frames. Keep development/tuning frames separate from evaluation frames. Report image reprojection error, court-coordinate error where reference is defensible, supported/estimated/unknown coverage, and sample sizes. Existing draft anchors and pleasing overlays are insufficient ground truth. |
+| First | Smoothing versus real motion | Ablate raw projection, camera smoothing only, and camera-plus-player smoothing on the same observations. Measure jitter reduction alongside position bias, turning/acceleration attenuation, onset/stop timing, and endpoint behavior. Tune process/measurement noise against held-out evidence rather than the smoothness score alone. |
+| High | Automatic calibration quality and uncertainty | Test whether inlier residuals, spatial support, camera plausibility and semantic line agreement can identify a confidently wrong homography. Validate uncertainty and rejection thresholds. Investigate camera-parameter/pose filtering versus the current probe representation and include lens distortion / actual court dimensions where needed. |
+| High | Court-line / landmark evidence | Investigate a documented basketball landmark detector or semantic court-line segmentation followed by geometric template refinement. Handle logos, painted areas, partial views and occlusion. The simple venue-specific yellow-pixel optimizer did not generalize even across these samples; do not promote it without measured improvement. Compare pretrained methods before considering fine-tuning. |
+| High | Camera motion, cuts and recovery | Test abrupt cuts, zooms, shake, replays, camera-side/orientation changes and longer unavailable intervals. Validate shot detection, initialization and re-acquisition. Keep off-support estimates unknown and distinguish measured model outputs from reconstructed camera estimates. The current smooth-motion assumption is supported only within the supplied continuous shots. |
+| High | Player ground-contact estimation | Compare bbox bottom centre with ankle/pose or segmentation-based floor contact, especially for jumping, loose boxes and occluded legs. Evaluate visibility/confidence and resulting metric projection error; court smoothing cannot fix an incorrect footpoint. |
+| High | Player roles, teams and stable identity | Replace sampled manual role labels with evaluated automatic classification; combine court boundaries and reliable role/team cues with tracking. Diagnose the confirmed 87-to-96 switch and duplicate tracks before further matching-threshold changes. Track IDs remain separate from player/jersey identity. See the tracking backlog for regression events and evaluation. |
+| Medium | Causal/live filtering and runtime | Compare forward Kalman or fixed-lag filtering with offline RTS. Measure lag, recovery, error and end-to-end processing time on specified Colab hardware, including detector, ReID, calibration and exports. The current RTS result uses future frames and is not a live-inference demonstration. |
+| Medium | Generalization, data and model provenance | Evaluate longer footage, different venues/marking colors, resolutions and camera styles. Check documented landmark schemas, training overlap, pretrained model/dataset suitability and licenses. If fine-tuning becomes necessary, collect diverse footage and independent validation; the two supplied clips alone are not a generalization dataset. |
+| Deferred | Ball, jersey OCR, off-screen trajectories and tactics | Keep these as separate experimental workstreams. A floor homography cannot locate an airborne ball in 3D. Hidden positions must remain explicit uncertain inference rather than observed ground truth. Tactical recognition follows validated spatial/identity measurements. |
+
+The next engineering cycle should start with the small independent evaluation
+set and a smoothing/geometry ablation, not more cosmetic overlay tuning. See
+[PROJECT_TASKS.md](PROJECT_TASKS.md) for actionable tasks and closure evidence.
+
 ## 1. Situation and product vision
 
 A former army colleague, now a developer, teamed up with a product professional (both work at Deloitte) and approached the user as a potential third cofounder/technical lead in computer vision. They are exploring a startup called TacticalAI (name appears in their POC document, sometimes TacticAI). The long-term product: a coach uploads basketball video; the system analyzes player/ball movements, scores and possessions, attacks and defense, player/team statistics, and play types such as pick-and-roll, pick-and-pop, layups, isolation, spot-up, and post-up.

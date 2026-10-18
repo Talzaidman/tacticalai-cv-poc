@@ -1,0 +1,271 @@
+{
+  "schema_version": 1,
+  "status": "draft",
+  "video": {
+    "width": 640,
+    "height": 360,
+    "fps": 25.0,
+    "frames": 150,
+    "sha256": "57948c01993d0593c872acbf4767cea0ee530144e3ca25a17437c22ed1559f11"
+  },
+  "court": {
+    "length_m": 28.0,
+    "width_m": 15.0,
+    "key_depth_m": 5.8,
+    "key_width_m": 4.9,
+    "assumption": "FIBA-style nominal dimensions; verify venue. Line-centre approximation.",
+    "reference": "https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2024-v10a.pdf",
+    "three_point_corner_offset_m": 0.9
+  },
+  "orientation": "x along court, y far to near; diagram left/right unrelated to image left/right",
+  "ransac_threshold_px": 4.0,
+  "max_interpolation_gap_frames": 25,
+  "keyframes": [
+    {
+      "frame_idx": 0,
+      "interpolate_to_next": true,
+      "anchors": {
+        "left_key_free_far": {
+          "image_xy": [
+            312,
+            217
+          ],
+          "use": "fit"
+        },
+        "left_key_free_near": {
+          "image_xy": [
+            358,
+            269
+          ],
+          "use": "fit"
+        },
+        "left_key_base_far": {
+          "image_xy": [
+            525,
+            206
+          ],
+          "use": "fit"
+        },
+        "left_key_base_near": {
+          "image_xy": [
+            608,
+            257
+          ],
+          "use": "fit"
+        }
+      }
+    },
+    {
+      "frame_idx": 25,
+      "interpolate_to_next": true,
+      "anchors": {
+        "left_key_free_far": {
+          "image_xy": [
+            275,
+            224
+          ],
+          "use": "fit"
+        },
+        "left_key_free_near": {
+          "image_xy": [
+            322,
+            276
+          ],
+          "use": "fit"
+        },
+        "left_key_base_far": {
+          "image_xy": [
+            491,
+            212
+          ],
+          "use": "fit"
+        },
+        "left_key_base_near": {
+          "image_xy": [
+            568,
+            262
+          ],
+          "use": "fit"
+        }
+      }
+    },
+    {
+      "frame_idx": 50,
+      "interpolate_to_next": true,
+      "anchors": {
+        "left_key_free_far": {
+          "image_xy": [
+            264,
+            226
+          ],
+          "use": "fit"
+        },
+        "left_key_free_near": {
+          "image_xy": [
+            310,
+            277
+          ],
+          "use": "fit"
+        },
+        "left_key_base_far": {
+          "image_xy": [
+            483,
+            213
+          ],
+          "use": "fit"
+        },
+        "left_key_base_near": {
+          "image_xy": [
+            560,
+            262
+          ],
+          "use": "fit"
+        }
+      }
+    },
+    {
+      "frame_idx": 75,
+      "interpolate_to_next": true,
+      "anchors": {
+        "left_key_free_far": {
+          "image_xy": [
+            261,
+            227
+          ],
+          "use": "fit"
+        },
+        "left_key_free_near": {
+          "image_xy": [
+            307,
+            279
+          ],
+          "use": "fit"
+        },
+        "left_key_base_far": {
+          "image_xy": [
+            480,
+            214
+          ],
+          "use": "fit"
+        },
+        "left_key_base_near": {
+          "image_xy": [
+            558,
+            263
+          ],
+          "use": "fit"
+        }
+      }
+    },
+    {
+      "frame_idx": 100,
+      "interpolate_to_next": true,
+      "anchors": {
+        "left_key_free_far": {
+          "image_xy": [
+            249,
+            232
+          ],
+          "use": "fit"
+        },
+        "left_key_free_near": {
+          "image_xy": [
+            296,
+            283
+          ],
+          "use": "fit"
+        },
+        "left_key_base_far": {
+          "image_xy": [
+            467,
+            219
+          ],
+          "use": "fit"
+        },
+        "left_key_base_near": {
+          "image_xy": [
+            546,
+            269
+          ],
+          "use": "fit"
+        }
+      }
+    },
+    {
+      "frame_idx": 125,
+      "interpolate_to_next": true,
+      "anchors": {
+        "left_key_free_far": {
+          "image_xy": [
+            242,
+            233
+          ],
+          "use": "fit"
+        },
+        "left_key_free_near": {
+          "image_xy": [
+            289,
+            285
+          ],
+          "use": "fit"
+        },
+        "left_key_base_far": {
+          "image_xy": [
+            458,
+            219
+          ],
+          "use": "fit"
+        },
+        "left_key_base_near": {
+          "image_xy": [
+            541,
+            270
+          ],
+          "use": "fit"
+        }
+      }
+    },
+    {
+      "frame_idx": 149,
+      "interpolate_to_next": false,
+      "anchors": {
+        "left_key_free_far": {
+          "image_xy": [
+            239,
+            234
+          ],
+          "use": "fit"
+        },
+        "left_key_free_near": {
+          "image_xy": [
+            285,
+            288
+          ],
+          "use": "fit"
+        },
+        "left_key_base_far": {
+          "image_xy": [
+            463,
+            222
+          ],
+          "use": "fit"
+        },
+        "left_key_base_near": {
+          "image_xy": [
+            544,
+            271
+          ],
+          "use": "fit"
+        },
+        "left_three_base_near": {
+          "image_xy": [
+            638,
+            329
+          ],
+          "use": "check"
+        }
+      }
+    }
+  ],
+  "notes": "Draft manual floor-intersection estimates by Codex at seven sampled frames; four key corners. Some intersections are partially occluded and estimated from adjoining visible line segments. Adjacent samples show continuous camera movement with no cut. Linear image-anchor interpolation is a temporal approximation, not measured calibration accuracy. User requested a full-clip minimap preview. Original single-frame calibration is preserved."
+}

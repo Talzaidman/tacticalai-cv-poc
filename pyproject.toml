@@ -9,11 +9,18 @@ description = "Reproducible person detection and tracking experiments"
 requires-python = ">=3.10"
 dynamic = ["dependencies"]
 
+[project.optional-dependencies]
+preview = ["imageio-ffmpeg==0.6.0"]
+geometry = ["scipy==1.18.1"]
+
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+tacticalai = ["auto_review.html", "kalicalib_reference_review.html", "challenge_presentation.html"]
 
 [project.scripts]
 tacticalai-track = "tacticalai.cli:main"

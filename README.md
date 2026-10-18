@@ -1,5 +1,31 @@
 # TacticalAI CV POC — YOLO26 baseline
 
+Latest preview adds robust Kalman/RTS camera and player-position smoothing:
+`outputs/challenge-player-smoothed-v1/index.html`, with original/smoothed and
+frame-synchronized comparison views. See [smoothing method and results](docs/PROJECTION_SMOOTHING.md).
+
+The current two-clip browser presentation uses the KaliCalib challenge checkpoint
+with existing TrackTrack + ReID observations: player boxes and a top-left
+projected mini-map. Open `outputs/challenge-player-presentation-v1/index.html`.
+See [presentation details and commands](docs/CHALLENGE_PRESENTATION.md).
+
+Manual court calibration is now available on branch `homography`:
+[workflow and commands](docs/HOMOGRAPHY.md). Clip 1 now has a full 6-second
+top-left mini-map preview from seven draft manual keyframes with interpolated
+anchors. Clip 2 retains its single-frame draft. Measured accuracy is pending.
+This workflow reuses saved TrackTrack + ReID observations and runs on CPU.
+
+The first automatic court baseline has also run on both full clips:
+[results, limitations and reproduction](docs/AUTOMATIC_HOMOGRAPHY_20261018.md).
+Open `outputs/homography-auto-v1/review.html` for browser comparison of automatic
+anchors, floor-feature tracking, mini-map and the manual reference. Automatic
+coverage is incomplete; it does not yet replace manual calibration.
+
+Current work and deferred improvements are tracked in
+[docs/PROJECT_TASKS.md](docs/PROJECT_TASKS.md), including court boundary control,
+jersey/role validation and the confirmed ID 87-to-96 failure. TrackTrack + ReID
+with buffer 30 is the current development candidate; accuracy remains unverified.
+
 ## Occlusion experiment (current notebook)
 
 `notebooks/colab_baseline.ipynb` now drives a 16-run retention/ReID experiment:

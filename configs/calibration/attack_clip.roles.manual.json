@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "status": "draft",
+  "tracking_frames_sha256": "b1ce87f27870edf42927f06d6e5667b2d48fe6689453730f664eb7093bba23b1",
+  "notes": "Manual role-only review of raw frames with track boxes at 0,25,50,75,100,125,149 and prior confirmed 96 switch at131. Sample review, not exhaustive ground truth. Track IDs can still change physical person or team. ID96 is sideline staff through130 and assigned to a player from131. No identity correction, team labels or inferred hidden positions.",
+  "intervals": [
+    {
+      "track_id": 85,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 86,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 87,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 88,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 89,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 91,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 94,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 95,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 100,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 101,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 102,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 103,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 105,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 106,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "player"
+    },
+    {
+      "track_id": 90,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "referee"
+    },
+    {
+      "track_id": 97,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "referee"
+    },
+    {
+      "track_id": 104,
+      "start_frame": 0,
+      "end_frame": 149,
+      "role": "referee"
+    },
+    {
+      "track_id": 96,
+      "start_frame": 0,
+      "end_frame": 130,
+      "role": "staff"
+    },
+    {
+      "track_id": 96,
+      "start_frame": 131,
+      "end_frame": 149,
+      "role": "player"
+    }
+  ]
+}
