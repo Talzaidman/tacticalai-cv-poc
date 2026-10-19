@@ -1,0 +1,15 @@
+{
+  "split": "development",
+  "source": "User-reported physical-person chains, converted to phase-scoped evaluation checks. These checks do not enter inference.",
+  "clip": "attack_clip",
+  "source_frames_sha256": "b1ce87f27870edf42927f06d6e5667b2d48fe6689453730f664eb7093bba23b1",
+  "chains": [
+    {"before": "87.0", "after": "96.1", "description": "Original player 87 receives the reused coach label 96"},
+    {"before": "85.0", "after": "102.0", "description": "Original player 85 later receives label 102"},
+    {"before": "89.0", "after": "91.1", "description": "Original player 89 later receives the reused label 91"},
+    {"before": "91.0", "after": "105.0", "description": "Original player 91 later receives label 105"}
+  ],
+  "must_separate": [85, 91, 96],
+  "verified_boundaries": [{"track_id": 96, "last_old_frame": 130, "first_new_frame": 131}],
+  "note": "Other automatic boundaries and the additional ID-89 change need review. Phase 0 means the early portion and phase 1 the late portion, if a change is detected."
+}

@@ -12,3 +12,4 @@
 - Prefer simple readable Python, small composable modules, parameterized CLI/scripts, and CPU-compatible postprocessing. Avoid web backends, databases, Kubernetes, and retraining before measuring pretrained baselines.
 - Use `.gitignore` for source videos, model weights, cached data, runtime secrets, and outputs. Check model/dataset licenses before commercial use.
 - Explain limitations and provide measurable outputs; don't equate visually pleasing overlays with verified accuracy. Confirm reported metrics against annotated ground truth.
+- Present experiment results in a local web page with playable annotated videos and matching evidence, and give the user a direct link to review it.

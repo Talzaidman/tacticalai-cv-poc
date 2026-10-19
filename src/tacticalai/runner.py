@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .export import csv_writer, records, sha256, write_json, write_rows
+from .tracker_config import configure_tracker
 
 
 def run(video, output, config, tracker_name, max_frames=None):
@@ -48,13 +49,16 @@ def run(video, output, config, tracker_name, max_frames=None):
         tracker_path = None
         if tracker_name != "none":
             source = Path(ultralytics.__file__).parent / "cfg" / "trackers" / f"{tracker_name}.yaml"
-            tracker_config = yaml.safe_load(source.read_text(encoding="utf-8"))
-            tracker_config.update(with_reid=config.get("with_reid", False),
-                                  gmc_method=config["gmc_method"])
-            if "track_buffer" in config:
-                tracker_config["track_buffer"] = config["track_buffer"]
-            if tracker_config["with_reid"]:
-                tracker_config["model"] = config.get("reid_model", "yolo26n-cls.pt")
+            tracker_config = configure_tracker(
+                yaml.safe_load(source.read_text(encoding="utf-8")), config, tracker_name)
+            if tracker_config["with_reid"] and str(tracker_config["model"]).endswith(".onnx"):
+                # Resolve before encoder creation: AutoBackend does not retain a public
+                # checkpoint path. Pass this exact file to the encoder and hash it.
+                from ultralytics.utils.downloads import attempt_download_asset
+                reid_path = Path(attempt_download_asset(tracker_config["model"])).resolve()
+                tracker_config["model"] = str(reid_path)
+                meta["reid_model_path"] = str(reid_path)
+                meta["reid_model_sha256"] = sha256(reid_path)
             meta["tracker_config"] = tracker_config
             tracker_path = output / "tracker.yaml"
             tracker_path.write_text(yaml.safe_dump(tracker_config), encoding="utf-8")
@@ -108,6 +112,13 @@ def run(video, output, config, tracker_name, max_frames=None):
                     meta["effective_tracker_config"] = vars(tracker.args).copy()
                     encoder = getattr(tracker, "encoder", None)
                     meta["reid_encoder_type"] = type(encoder).__name__ if encoder is not None else None
+                    reid_backend = getattr(encoder, "model", None)
+                    session = getattr(reid_backend, "session", None)
+                    meta["reid_runtime"] = dict(
+                        device=str(getattr(reid_backend, "device", "unknown")),
+                        providers=session.get_providers() if session is not None else None,
+                        crop_size=getattr(encoder, "imgsz", None),
+                        fp16=getattr(encoder, "fp16", None)) if encoder is not None else None
                     reid_weights = getattr(getattr(encoder, "model", None), "ckpt_path", None)
                     if reid_weights:
                         meta["reid_model_path"] = str(Path(reid_weights).resolve())
@@ -132,6 +143,11 @@ def run(video, output, config, tracker_name, max_frames=None):
                 export_seconds += time.perf_counter() - t
                 count += 1
         loop_seconds = time.perf_counter() - loop_start
+        # Encoders may install optional ONNX dependencies on first use.
+        # Capture the resolved environment outside the measured frame loop.
+        (output / "environment.txt").write_text(
+            subprocess.check_output([sys.executable, "-m", "pip", "freeze"], text=True),
+            encoding="utf-8")
         if count == 0 or (max_frames is None and declared > 0 and count != declared):
             raise RuntimeError(f"Decoded {count} frames, expected {declared}; output is incomplete")
         writer.release()

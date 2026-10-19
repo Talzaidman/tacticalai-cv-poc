@@ -33,7 +33,7 @@ class RunnerTests(unittest.TestCase):
             weights.write_bytes(b"simulated weights")
             cfg = root / "cfg/trackers"
             cfg.mkdir(parents=True)
-            (cfg / "botsort.yaml").write_text("tracker_type: botsort\n")
+            (cfg / "botsort.yaml").write_text("tracker_type: botsort\nmatch_thresh: 0.8\n")
 
             def boxes(count, tracked=False):
                 value = SimpleNamespace(xyxy=np.array([[1, 2, 20, 30]] * count),
@@ -55,9 +55,14 @@ class RunnerTests(unittest.TestCase):
 
                 def track(self, frame, **kwargs):
                     settings = yaml.safe_load(Path(kwargs['tracker']).read_text())
+                    encoder = None
+                    if str(settings.get('model', '')).endswith('.onnx'):
+                        encoder = SimpleNamespace(imgsz=448, fp16=False, model=SimpleNamespace(
+                            device='cpu', session=SimpleNamespace(
+                                get_providers=lambda: ['CPUExecutionProvider'])))
                     self.predictor = SimpleNamespace(trackers=[SimpleNamespace(
                         args=SimpleNamespace(**settings),
-                        max_frames_lost=settings.get('track_buffer', 30), encoder=None)])
+                        max_frames_lost=settings.get('track_buffer', 30), encoder=encoder)])
                     if self.index == 2 and fail[0]:
                         raise RuntimeError("simulated inference failure")
                     raw = boxes(2 if self.index == 0 else 0)
@@ -97,6 +102,21 @@ class RunnerTests(unittest.TestCase):
                 self.assertTrue(reid_meta['tracker_config']['with_reid'])
                 self.assertEqual(reid_meta['tracker_config']['model'], 'yolo26n-cls.pt')
                 self.assertEqual(reid_meta['effective_track_buffer_frames'], 60)
+                # Simulated ONNX download/backend: verify the exact supplied file,
+                # providers and association overrides survive into run metadata.
+                onnx_weights = root / 'downloaded-reid.onnx'
+                onnx_weights.write_bytes(b'simulated ONNX weights')
+                downloads = SimpleNamespace(attempt_download_asset=lambda name: str(onnx_weights))
+                onnx_config = dict(config, with_reid=True, reid_model='yolo26s-reid.onnx',
+                                   tracker_overrides={'botsort': {'match_thresh': 0.75}})
+                with patch.dict('sys.modules', {'ultralytics.utils.downloads': downloads}):
+                    run(video, root / 'onnx-settings', onnx_config, 'botsort')
+                onnx_meta = json.loads((root / 'onnx-settings/metadata.json').read_text())
+                from tacticalai.export import sha256
+                self.assertEqual(onnx_meta['reid_model_sha256'], sha256(onnx_weights))
+                self.assertEqual(onnx_meta['tracker_config']['model'], str(onnx_weights.resolve()))
+                self.assertEqual(onnx_meta['effective_tracker_config']['match_thresh'], 0.75)
+                self.assertEqual(onnx_meta['reid_runtime']['providers'], ['CPUExecutionProvider'])
                 fail[0] = True
                 with self.assertRaisesRegex(RuntimeError, "simulated inference failure"):
                     run(video, root / "failed", config, "botsort")

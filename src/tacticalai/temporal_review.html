@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Player identity · temporal repair</title>
+<style>
+:root{color-scheme:dark;--bg:#10151e;--panel:#1a2331;--muted:#acbad0;--green:#65efae;--amber:#ffcf73}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#eef4ff;font:16px/1.5 system-ui,sans-serif}main{max-width:1450px;margin:auto;padding:24px}h1{font-size:30px;margin:0}h2{font-size:20px;margin:8px 0}p{margin:8px 0 16px}.muted,small{color:var(--muted)}.badge{display:inline-block;background:#28384d;padding:4px 10px;border-radius:6px;font-size:13px}.panel{padding:20px;background:var(--panel);border:1px solid #354155;border-radius:12px;margin:18px 0}button,select,input{font:inherit}button,select{background:#26354a;color:white;border:1px solid #536780;border-radius:7px;padding:9px 13px;cursor:pointer}button:hover{background:#354d6c}button.active{border-color:var(--green);color:var(--green)}.controls{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.stats{display:flex;gap:30px;flex-wrap:wrap;margin:14px 0}.stat strong{display:block;font-size:30px}.stat small{display:block;max-width:200px}.stage{display:grid;grid-template-columns:1fr 1fr;gap:16px}.stage canvas{width:100%;border:1px solid #536780;background:black}.stage h2{font-size:18px}.stage p{font-size:14px;color:var(--muted)}#scrub{width:100%;accent-color:var(--green);margin:18px 0}#clock{font-variant-numeric:tabular-nums}.green{color:var(--green)}.amber{color:var(--amber)}#cases{display:flex;gap:8px;flex-wrap:wrap}.evidence{display:grid;grid-template-columns:1fr 1fr;gap:16px}.crops{display:flex;gap:8px;overflow-x:auto;align-items:start}.crop{min-width:85px;text-align:center;font-size:12px}.crop img{height:155px;max-width:140px;object-fit:contain;background:#0b1019;display:block;margin:auto;border:2px solid #435775}table{width:100%;border-collapse:collapse;font-size:14px}td,th{text-align:left;padding:9px;border-bottom:1px solid #3a4558}a{color:#89c8ff}.scroll{overflow:auto}#error{color:#ffaaaa}details{margin:12px 0}#curve{width:100%;height:170px;background:#121b28}#eventList button{margin:4px}video{display:none}@media(max-width:850px){main{padding:14px}.stage,.evidence{grid-template-columns:1fr}.stat strong{font-size:25px}}
+</style></head><body><main>
+<span class="badge">LOCAL EXPERIMENT · AUTOMATIC HYPOTHESES</span>
+<h1>Follow the person through changing IDs</h1>
+<p class="muted">Original tracking is preserved. A separate identity layer splits persistent appearance changes, leaves unclear transitions unknown, and reconnects compatible segments.</p>
+<div class="controls"><label>Footage <select id="clip"><option value="attack_clip">Clip 1 · 6 seconds</option><option value="attack_clip2">Clip 2 · 7 seconds</option></select></label><span id="load">Loading…</span></div>
+<p id="error" role="alert"></p>
+<div class="stats" id="stats"></div>
+<div class="panel"><h2>Choose a person to inspect</h2><div id="cases"></div><p id="caseDescription"></p><div class="controls"><label><input id="all" type="checkbox"> Show every ID</label><label>View <select id="view"><option value="context">Full frame</option><option value="focus">Zoom to selected people</option></select></label></div>
+<div class="stage"><section><h2>Before · tracker labels</h2><canvas id="before"></canvas><p>Labels can stay the same when the physical person changes.</p></section><section><h2>After · person identities</h2><canvas id="after"></canvas><p><span class="green">Green = selected person.</span> <span class="amber">Orange = other person from a split ID.</span> Gray ? = unknown.</p></section></div>
+<video id="video" preload="auto" muted playsinline></video><input id="scrub" aria-label="Frame" type="range" min="0" max="149" value="0" step="1">
+<div class="controls"><button id="play">Play</button><button id="prev">← 1 frame</button><button id="next">1 frame →</button><label>Speed <select id="speed"><option value="0.25">0.25×</option><option value="0.5" selected>0.5×</option><option value="1">1×</option></select></label><strong id="clock"></strong><button id="jump">Jump to transition</button></div>
+</div>
+<div class="panel"><h2>Appearance evidence for this connection</h2><p id="evidenceNote" class="muted"></p><div class="evidence"><section><h2 id="leftLabel"></h2><div class="crops" id="leftCrops"></div></section><section><h2 id="rightLabel"></h2><div class="crops" id="rightCrops"></div></section></div></div>
+<div class="panel"><h2>Appearance changes inside a tracker ID</h2><p class="muted">Boundaries below are automatic proposals. Unknown means the identity layer abstains; the original box and tracker label remain available.</p><div id="eventList"></div><div class="scroll"><table><thead><tr><th>Raw ID</th><th>Last old-person anchor</th><th>First new-person anchor</th><th>Unassigned source observations</th><th>Review status</th></tr></thead><tbody id="events"></tbody></table></div></div>
+<div class="panel"><h2>Unique IDs accumulated over the clip</h2><canvas id="curve" width="1100" height="170"></canvas><p class="muted">White = original tracker IDs. Green = person hypotheses. Gray transitions are excluded from the green count. Splitting a mixed ID may add a person; reconnecting segments removes duplicates. A lower count alone does not prove correctness.</p><div id="review"></div><details><summary>All proposed connections and scores</summary><div class="scroll"><table><thead><tr><th>Earlier segment → later segment</th><th>Cosine score</th><th>Outgoing / incoming margin</th></tr></thead><tbody id="links"></tbody></table></div></details></div>
+<div class="panel"><h2>What was measured</h2><p>Same saved YOLO26s / TrackTrack observations, source buffer 30, ReID enabled with the original generic encoder, GMC sparseOptFlow. No detector or tracker rerun. The new offline layer uses basketball-trained CLIP-ReIdent features, persistent appearance-change checks, and one-to-one gallery matching. The selected buffer 45 applies to future tracker runs.</p><p class="muted">Development thresholds were assessed using these clips and your feedback. This is not an independent accuracy benchmark. Only one change per raw ID is supported in this experiment; pose changes, small crops and occlusion can still cause errors. Missing detections and off-screen positions are not invented.</p><div id="downloads"></div></div>
+</main><script type="module">
+const $=id=>document.getElementById(id),video=$('video');
+let data,selected,mode='link',currentClip='attack_clip',cases=[],generation=0;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const short=s=>s===null?'?':String(s).endsWith('.0')?String(s).slice(0,-2):String(s);
+const fmt=n=>n===null||n===undefined?'—':n.toFixed(4);
+function selectedIds(){
+ const ids=new Set([selected?.before,selected?.after].filter(Boolean));
+ if(mode==='event'){for(const [sid,s]of Object.entries(data.segments))if(s.source_track_id===selected.track_id)ids.add(sid)}
+ const people=new Set([...ids].map(s=>data.mapping[s]));
+ const raw=new Set([...ids].map(s=>data.segments[s].source_track_id));
+ for(const [sid,s]of Object.entries(data.segments))if(people.has(data.mapping[sid]))raw.add(s.source_track_id);
+ return {ids,people,raw,target:mode==='event'?data.mapping[`${selected.track_id}.0`]:data.mapping[selected?.before]};
+}
+function frameIndex(){return Math.min(data.frames.length-1,Math.max(0,Math.floor(video.currentTime*data.fps+0.001)))}
+function seek(f){if(!data)return;f=Math.max(0,Math.min(data.frames.length-1,f));video.currentTime=(f+.05)/data.fps;$('scrub').value=f;paint()}
+function label(ctx,text,x,y,color,scale){ctx.font=`bold ${Math.max(13,17*scale)}px system-ui`;ctx.lineWidth=3;ctx.strokeStyle='#10151e';ctx.strokeText(text,x,y);ctx.fillStyle=color;ctx.fillText(text,x,y)}
+function paint(){
+ if(!data||!selected||video.readyState<2)return;
+ const f=frameIndex(),rows=data.frames[f].tracks,focus=selectedIds(),all=$('all').checked;
+ let viewport=[0,0,data.width,data.height];
+ if($('view').value==='focus'){
+  const boxes=rows.filter(r=>focus.raw.has(r.track_id)).map(r=>r.bbox_xyxy);
+  if(boxes.length){const x=Math.max(0,Math.min(...boxes.map(b=>b[0]))-70),y=Math.max(0,Math.min(...boxes.map(b=>b[1]))-45);const r=Math.min(data.width,Math.max(...boxes.map(b=>b[2]))+70),b=Math.min(data.height,Math.max(...boxes.map(b=>b[3]))+45);viewport=[x,y,r-x,b-y]}
+ }
+ for(const side of ['before','after']){
+  const canvas=$(side),ctx=canvas.getContext('2d');canvas.width=data.width;canvas.height=data.height;
+  const [vx,vy,vw,vh]=viewport,s=Math.min(canvas.width/vw,canvas.height/vh),ox=(canvas.width-vw*s)/2,oy=(canvas.height-vh*s)/2;
+  ctx.fillStyle='#000';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(video,vx,vy,vw,vh,ox,oy,vw*s,vh*s);
+  for(const row of rows){
+   if(!all&&!focus.raw.has(row.track_id))continue;
+   const [x1,y1,x2,y2]=row.bbox_xyxy,x=(x1-vx)*s+ox,y=(y1-vy)*s+oy;
+   const target=row.player_id===focus.target,color=side==='before'?'#ffffff':row.player_id===null?'#bec3cc':target?'#65efae':'#ffcf73';
+   ctx.strokeStyle=color;ctx.lineWidth=Math.max(2,3*data.width/1000);ctx.setLineDash(row.player_id===null&&side==='after'?[8,5]:[]);ctx.strokeRect(x,y,(x2-x1)*s,(y2-y1)*s);ctx.setLineDash([]);
+   const text=side==='before'?`ID ${row.track_id}`:row.player_id===null?`? · raw ${row.track_id}`:`P ${short(row.player_id)} · raw ${row.track_id}`;
+   label(ctx,text,x,Math.max(20*data.width/1000,y-6),color,data.width/800);
+  }
+ }
+ $('scrub').value=f;$('clock').textContent=`Frame ${f} / ${data.frames.length-1} · ${(f/data.fps).toFixed(2)} s`;
+}
+function showCrops(id,sid){
+ $(id).innerHTML='';const samples=data.galleries[sid]||[];
+ const chosen=samples.length<=4?samples:[samples[0],samples[Math.floor(samples.length/3)],samples[Math.floor(2*samples.length/3)],samples.at(-1)];
+ for(const o of chosen){const figure=document.createElement('div');figure.className='crop';const image=document.createElement('img');image.src=`${currentClip}/${o.crop}`;image.alt=`Raw ID ${o.track_id}, frame ${o.frame}`;image.title='Click to inspect this frame';image.onclick=()=>{video.pause();seek(o.frame)};const caption=document.createElement('div');caption.textContent=`ID ${o.track_id} · f${o.frame}`;figure.append(image,caption);$(id).append(figure)}
+ if(!chosen.length)$(id).textContent='Insufficient clear crops for matching.';
+}
+function choose(item,type='link'){
+ selected=item;mode=type;video.pause();$('play').textContent='Play';
+ const a=type==='event'?`${item.track_id}.0`:item.before,b=type==='event'?`${item.track_id}.1`:item.after;
+ $('caseDescription').textContent=type==='event'?`Raw ID ${item.track_id} changes appearance: old-person anchor f${item.last_old_frame}, new-person anchor f${item.first_new_frame}. The identity layer keeps these people separate.`:`Follow P ${short(data.mapping[a])}: raw ID ${data.segments[a].source_track_id} → raw ID ${data.segments[b].source_track_id}. Gallery score ${item.score.toFixed(4)}; score is not a probability.`;
+ $('leftLabel').textContent=`Earlier · segment ${a}`;$('rightLabel').textContent=`Later · segment ${b}`;
+ $('evidenceNote').textContent=type==='event'?'These galleries belong to opposite sides of an appearance-change hypothesis. They are deliberately not merged.':'Temporally separated gallery crops used for the proposed match. Click a crop to seek the video.';
+ showCrops('leftCrops',a);showCrops('rightCrops',b);
+ for(const button of $('cases').children)button.classList.toggle('active',button.dataset.key===`${type}:${type==='event'?item.track_id:item.before+'>'+item.after}`);
+ seek(type==='event'?item.last_old_frame:Math.max(0,data.segments[b].start-12));
+}
+function chart(){
+ const c=$('curve'),ctx=c.getContext('2d'),seenRaw=new Set(),seenPeople=new Set(),raw=[],people=[];
+ for(const f of data.frames){for(const r of f.tracks){seenRaw.add(r.track_id);if(r.player_id!==null)seenPeople.add(r.player_id)}raw.push(seenRaw.size);people.push(seenPeople.size)}
+ const max=Math.max(...raw,...people)+1;ctx.clearRect(0,0,c.width,c.height);ctx.font='13px system-ui';ctx.fillStyle='#acbad0';
+ for(let v=0;v<=max;v+=5){const y=145-v/max*125;ctx.fillText(v,5,y);ctx.strokeStyle='#344052';ctx.beginPath();ctx.moveTo(30,y);ctx.lineTo(c.width-45,y);ctx.stroke()}
+ for(const [ys,color]of [[raw,'#ffffff'],[people,'#65efae']]){ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ys.forEach((v,i)=>{const x=35+i/(ys.length-1)*(c.width-90),y=145-v/max*125;i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();ctx.fillStyle=color;ctx.fillText(ys.at(-1),c.width-42,145-ys.at(-1)/max*125)}
+ ctx.fillStyle='#acbad0';ctx.fillText('0 s',35,165);ctx.fillText(`${(data.frames.length/data.fps).toFixed(1)} s`,c.width-80,165);
+}
+function populate(){
+ const s=data.summary;$('stats').innerHTML=`<div class="stat"><strong>${s.raw_ids} → ${s.player_ids}</strong><small>Tracker IDs → person hypotheses</small></div><div class="stat"><strong>${s.switches}</strong><small>Proposed changes inside raw IDs</small></div><div class="stat"><strong>${s.links.length}</strong><small>Segment connections</small></div><div class="stat"><strong>${s.unknown_rows} / ${s.total_rows}</strong><small>Unknown identity observations (${(100*s.unknown_rows/s.total_rows).toFixed(1)}%)</small></div>`;
+ cases=data.candidates.filter(c=>c.accepted);$('cases').innerHTML='';
+ const priority={'87.0>96.1':0,'85.0>102.0':1,'89.0>91.1':2,'91.0>105.0':3};
+ cases.sort((a,b)=>(priority[a.before+'>'+a.after]??10)-(priority[b.before+'>'+b.after]??10));
+ for(const item of cases){const b=document.createElement('button');b.textContent=`${item.before} → ${item.after}`;b.dataset.key=`link:${item.before}>${item.after}`;b.onclick=()=>choose(item);$('cases').append(b)}
+ $('events').innerHTML='';$('eventList').innerHTML='';
+ for(const e of data.events){const unknown=data.frames.flatMap(f=>f.tracks).filter(r=>r.track_id===e.track_id&&r.player_id===null).length;const tr=document.createElement('tr');const status=(data.reported_switch_ids||[]).includes(e.track_id)?'User reported change; boundaries automatic':'New automatic proposal · needs review';tr.innerHTML=`<td>${e.track_id}</td><td>f${e.last_old_frame}</td><td>f${e.first_new_frame}</td><td>${unknown}</td><td>${esc(status)}</td>`;$('events').append(tr);const b=document.createElement('button');b.textContent=`Inspect ID ${e.track_id} change`;b.onclick=()=>choose(e,'event');$('eventList').append(b)}
+ if(!data.events.length)$('events').innerHTML='<tr><td colspan="5">No persistent changes passed the development thresholds.</td></tr>';
+ $('links').innerHTML=cases.map(c=>`<tr><td>${esc(c.before)} → ${esc(c.after)}</td><td>${fmt(c.score)}</td><td>${fmt(c.outgoing_margin)} / ${fmt(c.incoming_margin)}</td></tr>`).join('');
+ $('downloads').innerHTML=['metadata.json','frames.jsonl','events.json','mapping.json','candidates.json'].map(f=>`<a href="${currentClip}/${f}" download>${f}</a>`).join(' · ');
+ const r=data.development_review;
+ $('review').textContent=r?`Reviewed development checks: ${r.positive_recovered}/${r.positive_total} positive ID pairs recovered; ${r.negative_merged}/${r.negative_total} incorrect original-player pairs merged. Reported person chains recovered: ${r.chains_recovered}/${r.chains_total}. These checks are not whole-video accuracy.`:'Frame-level identity accuracy has not been measured.';
+ $('scrub').max=data.frames.length-1;chart();
+ const defaultCase=cases[0];if(defaultCase)choose(defaultCase);else if(data.events.length)choose(data.events[0],'event');else{const sid=Object.keys(data.segments)[0];choose({before:sid,after:sid,score:1})}
+}
+async function load(clip){
+ const token=++generation;video.pause();$('load').textContent='Loading…';$('error').textContent='';
+ try{const response=await fetch(`${clip}/review-data.json`);if(!response.ok)throw Error(`Data request failed (${response.status})`);const incoming=await response.json();if(token!==generation)return;data=incoming;currentClip=clip;video.src=`${clip}/clean.mp4`;video.playbackRate=Number($('speed').value);populate();$('load').textContent=`${data.frames.length} frames · ${data.fps} fps`}
+ catch(e){$('error').textContent=`Cannot load experiment: ${e.message}. Open this page through its local HTTP link.`;$('load').textContent='Load failed'}
+}
+video.addEventListener('loadeddata',()=>{if(selected)seek(mode==='event'?selected.last_old_frame:Math.max(0,data.segments[selected.after].start-12))});
+video.addEventListener('seeked',paint);video.addEventListener('ended',()=>{$('play').textContent='Play'});
+$('clip').onchange=e=>load(e.target.value);$('play').onclick=async()=>{if(video.paused){if(video.ended)seek(0);await video.play();$('play').textContent='Pause'}else{video.pause();$('play').textContent='Play'}};
+$('prev').onclick=()=>{video.pause();seek(frameIndex()-1)};$('next').onclick=()=>{video.pause();seek(frameIndex()+1)};
+$('scrub').oninput=e=>{video.pause();seek(Number(e.target.value))};$('speed').onchange=e=>video.playbackRate=Number(e.target.value);$('all').onchange=paint;$('view').onchange=paint;
+$('jump').onclick=()=>seek(mode==='event'?selected.last_old_frame:Math.max(0,data.segments[selected.after].start-3));
+document.addEventListener('keydown',e=>{if(['INPUT','SELECT'].includes(e.target.tagName))return;if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();video.pause();seek(frameIndex()+(e.key==='ArrowLeft'?-1:1))}});
+function tick(){if(data&&!video.paused)paint();requestAnimationFrame(tick)}requestAnimationFrame(tick);load('attack_clip');
+</script></body></html>

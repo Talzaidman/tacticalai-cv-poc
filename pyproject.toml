@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 dynamic = ["dependencies"]
 
 [project.optional-dependencies]
+clip-reident = ["open-clip-torch==2.0.2", "gdown==5.2.0"]
 preview = ["imageio-ffmpeg==0.6.0"]
 geometry = ["scipy==1.18.1"]
 
@@ -20,7 +21,7 @@ dependencies = {file = ["requirements.txt"]}
 where = ["src"]
 
 [tool.setuptools.package-data]
-tacticalai = ["auto_review.html", "kalicalib_reference_review.html", "challenge_presentation.html"]
+tacticalai = ["auto_review.html", "kalicalib_reference_review.html", "challenge_presentation.html", "gallery_review.html", "temporal_review.html", "identity_presentation.html"]
 
 [project.scripts]
 tacticalai-track = "tacticalai.cli:main"

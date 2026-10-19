@@ -1,5 +1,38 @@
 # TacticalAI CV POC — YOLO26 baseline
 
+Combined tracking + identity + court-map checkpoint:
+[complete presentation](docs/IDENTITY_COURT_PRESENTATION.md),
+`outputs/identity-court-complete-final/index.html`. It shows all current player
+tracks by default, with all-person and original/person-ID display options,
+annotated MP4 downloads, positions and embedded matching evidence. Automatic
+ID-renaming checks pass on both clips. Manual role labels remain display inputs.
+
+Latest identity development trial: [temporal identity consistency](docs/TEMPORAL_IDENTITY_20261019.md).
+The new layer splits mixed tracker IDs and reconnects person-consistent portions.
+It recovers the four reported person chains and retains all six confirmed pair
+connections, while keeping both reviewed negative original-player pairs separate.
+Full-clip counts are **18→16 / 18→14**, with 30 / 0 unknown identity observations.
+Review `outputs/temporal-reid-final/index.html` through a local HTTP server.
+ID 89 has an additional proposed change that needs review. These are development
+results, not held-out or frame-level accuracy. Original tracking is preserved.
+
+Earlier [gallery improvements and ablations](docs/GALLERY_IMPROVEMENTS_20261019.md)
+remain available under `outputs/gallery-improvements-v2/candidate/index.html`.
+
+Earlier identity experiment: [whole-ID gallery matching](docs/GALLERY_REID.md),
+preserving the original 18 IDs and proposing 18→16 / 18→15 identities.
+Open `outputs/gallery-reid-final/index.html` through a local HTTP server for the
+clearer before/after review. Accuracy remains unverified.
+
+Player ReID work on branch `player-reid`: [model candidates, ready configs and
+occlusion/matching experiments](docs/PLAYER_REID.md). Dedicated encoders have
+not yet been benchmarked on our footage.
+
+Basketball-trained CLIP-ReIdent now has a separate [offline reconnect experiment](docs/CLIP_REIDENT.md)
+using saved tracklets, review crops and provisional persistent identity labels.
+Both clips have been processed locally. Open `outputs/clip-reident-paper-v2/index.html`
+to review the first results; correct-recovery accuracy has not been measured.
+
 Latest preview adds robust Kalman/RTS camera and player-position smoothing:
 `outputs/challenge-player-smoothed-v1/index.html`, with original/smoothed and
 frame-synchronized comparison views. See [smoothing method and results](docs/PROJECTION_SMOOTHING.md).

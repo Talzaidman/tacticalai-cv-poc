@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "review_date": "2026-10-19",
+  "clip": "attack_clip",
+  "source": "Explicit user review in chat; exact 96 boundary also verified in prior source-video review",
+  "split": "development",
+  "source_run": "outputs/occlusion-20261015T204150Z-029a7a35/reid/attack_clip/tracktrack",
+  "source_frames_sha256": "b1ce87f27870edf42927f06d6e5667b2d48fe6689453730f664eb7093bba23b1",
+  "scope": "Physical-person chains across changing labels. These are not whole-ID equivalences and must not force global ID merges. Unspecified switch frames remain null.",
+  "events": [
+    {
+      "event_id": "coach_96_to_player_87",
+      "reused_track_id": 96,
+      "old_person": "Coach/sideline person originally carrying ID 96",
+      "new_person": "Player originally carrying ID 87",
+      "last_verified_old_person_frame": 130,
+      "first_verified_new_person_frame": 131,
+      "boundary_evidence": "docs/OCCLUSION_RESULTS_20261015.md; original exported observations and prior visual review",
+      "physical_person_chain": [
+        {"track_id": 87, "phase": "earlier player observations"},
+        {"track_id": 96, "phase": "player observations from frame 131"}
+      ]
+    },
+    {
+      "event_id": "id_91_transfers_to_original_player_89",
+      "reused_track_id": 91,
+      "old_person": "Player originally carrying ID 91; later identified by the user as ID 105",
+      "new_person": "Player originally carrying ID 89",
+      "last_verified_old_person_frame": null,
+      "first_verified_new_person_frame": null,
+      "physical_person_chains": [
+        [{"track_id": 89, "phase": "before transfer"}, {"track_id": 91, "phase": "after transfer"}],
+        [{"track_id": 91, "phase": "before transfer"}, {"track_id": 105, "phase": "later original player"}]
+      ]
+    },
+    {
+      "event_id": "id_85_transfers_to_late_arriving_player",
+      "reused_track_id": 85,
+      "old_person": "Player originally carrying ID 85; later carrying ID 102",
+      "new_person": "Late-arriving player who passes near the original ID-85 player",
+      "last_verified_old_person_frame": null,
+      "first_verified_new_person_frame": null,
+      "physical_person_chains": [
+        [{"track_id": 85, "phase": "before transfer"}, {"track_id": 102, "phase": "later original player"}],
+        [{"track_id": null, "phase": "late arrival, earlier label unknown"}, {"track_id": 85, "phase": "after transfer"}]
+      ]
+    }
+  ],
+  "status": "Recorded review evidence; model identity outputs have not been manually repaired"
+}

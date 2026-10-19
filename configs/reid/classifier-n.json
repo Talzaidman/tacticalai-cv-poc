@@ -1,0 +1,17 @@
+{
+  "model": "yolo26s.pt",
+  "conf": 0.1,
+  "iou": 0.7,
+  "imgsz": 1280,
+  "max_det": 100,
+  "device": "0",
+  "half": false,
+  "seed": 0,
+  "trackers": [
+    "tracktrack"
+  ],
+  "with_reid": true,
+  "gmc_method": "sparseOptFlow",
+  "track_buffer": 45,
+  "reid_model": "yolo26n-cls.pt"
+}

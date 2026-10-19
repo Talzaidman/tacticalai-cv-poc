@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "review_date": "2026-10-19",
+  "source": "Explicit user review in chat",
+  "split": "development",
+  "scope": "Pair-level judgments on the original saved TrackTrack IDs; not exhaustive frame-level identity ground truth.",
+  "source_runs": {
+    "attack_clip": "outputs/occlusion-20261015T204150Z-029a7a35/reid/attack_clip/tracktrack",
+    "attack_clip2": "outputs/occlusion-20261015T204150Z-029a7a35/reid/attack_clip2/tracktrack"
+  },
+  "pairs": [
+    {"clip": "attack_clip", "track_ids": [85, 106], "same_person": false, "interpretation": "Whole-ID merge is unsafe: the original player with ID 85 differs from 106; ID 85 is separately reported to change physical person. This does not label every crop pair as different people."},
+    {"clip": "attack_clip2", "track_ids": [219, 228], "same_person": true},
+    {"clip": "attack_clip2", "track_ids": [212, 228], "same_person": false},
+    {"clip": "attack_clip", "track_ids": [88, 101], "same_person": true},
+    {"clip": "attack_clip2", "track_ids": [214, 229], "same_person": true},
+    {"clip": "attack_clip2", "track_ids": [218, 225], "same_person": true},
+    {"clip": "attack_clip2", "track_ids": [222, 227], "same_person": true},
+    {"clip": "attack_clip", "track_ids": [100, 103], "same_person": true}
+  ]
+}
