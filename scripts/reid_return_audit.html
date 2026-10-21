@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ReID continuity comparison · Clip 2</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#0c111b;color:#e7edf8}body{max-width:1600px;margin:auto;padding:28px}h1{font-size:28px;margin:0 0 12px}h2{font-size:20px}p{line-height:1.6;max-width:1100px;color:#b9c7db}a{color:#8fc4ff}.notice{border-left:3px solid #f6b957;padding:4px 18px;background:#18202e;margin:24px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.panel{border:1px solid #2c3b51;border-radius:12px;overflow:hidden;background:#141d2b}.panel h2,.panel p{margin:14px 18px}video{width:100%;display:block;background:black}.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:20px 0}button,select{background:#23344d;color:#fff;border:1px solid #435b7c;border-radius:6px;padding:9px 14px;cursor:pointer}table{border-collapse:collapse;width:100%;max-width:1050px;margin:20px 0}td,th{text-align:left;padding:12px;border-bottom:1px solid #2c3b51}th{color:#9eb3d0}img{max-width:100%;height:auto;border-radius:8px}summary{cursor:pointer;padding:16px 0;color:#b7d6ff}.small{font-size:14px;color:#a0b2cb}output{font-variant-numeric:tabular-nums}@media(max-width:900px){.grid{grid-template-columns:1fr}body{padding:16px}}
+</style>
+<h1>ReID continuity comparison · Clip 2</h1>
+<p>The newer coverage settings split and duplicate the inspected player. The earlier run retained one tracker ID across short gaps. These are saved automatic outputs; the crops below are diagnostic evidence, with no manual identity corrections applied.</p>
+<div class="notice"><p><strong>Recommendation: restore the earlier complete identity pipeline as the baseline.</strong> Keep the colored silhouettes, IDs, minimap and automatic display filters. Treat the lower tracker thresholds as an experiment until both coverage and identity continuity have been evaluated.</p></div>
+<div class="controls">
+<button id="play">Play both</button><button id="pause">Pause both</button>
+<label>Speed <select id="speed"><option value="0.25">0.25×</option><option value="0.5" selected>0.5×</option><option value="1">1×</option></select></label>
+<button data-frame="0">Start</button><button data-frame="70">Before · f70</button><button data-frame="75">Duplicate · f75</button><button data-frame="84">Duplicate · f84</button><button data-frame="100">After · f100</button>
+<output id="position">Frame 0 / 174</output>
+</div>
+<div class="grid">
+<section class="panel"><h2>Earlier identity checkpoint</h2><video id="earlier" src="earlier.mp4" controls preload="auto" playsinline></video><p><strong>P215</strong> · underlying tracker T215. One ID, 170 observations across frames 0–174.</p><p><a href="http://127.0.0.1:8885/?source=linked&amp;clip=2&amp;frame=70&amp;focus=P215" target="_blank">Inspect P215 with timeline and frame stepping ↗</a></p></section>
+<section class="panel"><h2>Newer coverage experiment</h2><video id="updated" src="updated.mp4" controls preload="auto" playsinline></video><p><strong>T38 / T292</strong> · overlapping tracks on the same player, followed by T292 continuing.</p><p><a href="http://127.0.0.1:8885/?source=updated&amp;clip=2&amp;frame=75&amp;focus=T292" target="_blank">Inspect T292 with timeline and frame stepping ↗</a></p></section>
+</div>
+<p class="small">Both videos use the clean view: pending IDs and boundary/uncertain detections hidden. These controls affect the display, not the saved tracker associations. Use “Play both” and the frame buttons to align playback; native video controls can move either video independently.</p>
+<table><thead><tr><th>Setting / stage</th><th>Earlier checkpoint</th><th>Coverage experiment</th></tr></thead><tbody>
+<tr><td>Tracker</td><td>TrackTrack</td><td>TrackTrack</td></tr>
+<tr><td>High / low / new-track gates</td><td>0.60 / 0.25 / 0.70</td><td>0.25 / 0.10 / 0.25</td></tr>
+<tr><td>Online ReID</td><td>Enabled · yolo26n-cls</td><td>Enabled · yolo26n-cls</td></tr>
+<tr><td>Lost-track buffer / GMC</td><td>30 frames / sparseOptFlow</td><td>30 frames / sparseOptFlow</td></tr>
+<tr><td>Offline identity linking</td><td>Automatic CLIP temporal/gallery layer</td><td>Not run for this experiment</td></tr>
+<tr><td>Automatic court prefilter</td><td>No</td><td>Yes · conservative 3 m margin</td></tr>
+</tbody></table>
+<p>The earlier raw tracker already held T215 for this case; offline linking was not needed to repair it. Lower thresholds also split this player in a replay without the court prefilter, so court filtering is not required for the regression.</p>
+<h2>What happened to the inspected player</h2>
+<p>T38 and T292 coexist at frames 75, 81, 82, 83, 84, 87 and 96. Representative crops show duplicate boxes on the same black-uniformed player; the T38 crop at frame 96 is mixed/ambiguous. This is a duplicate-track problem as well as a continuity problem.</p>
+<img src="T38-T292-crops.jpg" alt="Saved crops of T38 and T292 across frames showing overlapping tracks on the same player">
+<p>At the first exported T292 frame, the partial T38 box overlaps the larger T292 box by about 0.497 IoU, below the tracker's 0.55 duplicate suppression threshold. That is consistent with permissive initialization allowing another track. Internal unconfirmed states and association costs were not logged, so the exact track creation event is not established.</p>
+<details><summary>About the reported T32 → T292 pair</summary><p>In this saved clip T32 stays on a different, orange-shirted person through all 175 frames. The likely intended comparison is T38 → T292. This inspection does not add a role classifier or a manual identity link.</p><img src="T32-T292-crops.jpg" alt="T32 and T292 crop comparison showing different people"></details>
+<p class="small">This is a confirmed regression in one inspected case, not a comprehensive accuracy score. <a href="audit.json">Download machine-readable audit</a>. Existing runs and inference results remain preserved.</p>
+<script>
+const earlier=document.getElementById('earlier'),updated=document.getElementById('updated'),videos=[earlier,updated],position=document.getElementById('position');
+let targetFrame=0;
+function rate(){videos.forEach(v=>v.playbackRate=Number(document.getElementById('speed').value))}
+function seek(frame){targetFrame=frame;videos.forEach(v=>{v.pause();if(v.readyState>0)v.currentTime=(frame+0.001)/25});position.value=`Frame ${frame} / 174`}
+videos.forEach(v=>{v.addEventListener('loadedmetadata',()=>{v.currentTime=(targetFrame+0.001)/25;rate()})});
+document.getElementById('play').onclick=async()=>{if(earlier.ended)seek(0);updated.currentTime=earlier.currentTime;rate();await Promise.all(videos.map(v=>v.play()))};
+document.getElementById('pause').onclick=()=>videos.forEach(v=>v.pause());
+document.getElementById('speed').onchange=rate;
+document.querySelectorAll('[data-frame]').forEach(b=>b.onclick=()=>seek(Number(b.dataset.frame)));
+earlier.addEventListener('timeupdate',()=>{position.value=`Frame ${Math.min(174,Math.floor(earlier.currentTime*25))} / 174`;if(!earlier.paused&&!updated.paused&&Math.abs(earlier.currentTime-updated.currentTime)>.12)updated.currentTime=earlier.currentTime});
+rate();
+</script>
+</html>

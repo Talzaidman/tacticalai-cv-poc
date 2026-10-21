@@ -1,5 +1,69 @@
 # TacticalAI CV POC — YOLO26 baseline
 
+**Latest video: team colors and experimental sideline filtering.**
+[Clip 1](http://127.0.0.1:8890/attack_clip/annotated.mp4) /
+[Clip 2](http://127.0.0.1:8890/attack_clip2/annotated.mp4).
+Team A is blue, B amber, referees purple and unknowns gray in both silhouettes
+and the minimap. Display filtering reduces crowd/sideline overlays while keeping
+all measurements in the exports. It can hide referees near sidelines and remains
+experimental. [Method and limitations](docs/TEAM_COLORS_FLOOR_20261021.md).
+
+**Current development video (21 October 2026):**
+[Clip 1](http://127.0.0.1:8889/attack_clip/annotated.mp4) /
+[Clip 2](http://127.0.0.1:8889/attack_clip2/annotated.mp4).
+Confirmed tracks are retained; additional YOLO people appear gray as `Unlinked`,
+with segmentation where available and a box fallback otherwise. Development
+review now uses the basic video player and notes in chat, rather than a new
+investigation UI. See [method and checks](docs/UNLINKED_PEOPLE_20261021.md).
+
+**Automatic teams/roles and consolidated exports (21 October 2026):**
+Open http://127.0.0.1:8888/ for both full clips, automatic player/referee/other
+hypotheses, anonymous Team A/B, evidence crops, CSV/JSONL and scoped runtime reports.
+Unknowns remain explicit; no manual role/team labels or identity corrections enter
+inference. Development spot check: 39/41 correct roles and 29/31 correct teams,
+including abstentions; this is not held-out-video accuracy.
+See [methods, limitations, execution and reproduction](docs/ROLES_TEAMS_20261021.md).
+The restored tracking/identity setup below remains unchanged.
+
+**Active identity setup restored (21 October 2026):**
+`configs/reid/classifier-n.json` now exactly matches the earlier executed
+`identity_checkpoint_20261019.json`: TrackTrack, online ReID, buffer 30,
+GMC sparseOptFlow and original 0.60/0.25/0.70 confidence gates.
+The current presentation includes the earlier automatic CLIP temporal/gallery
+identity stage, colored silhouettes and top-left minimaps for both clips.
+Open http://127.0.0.1:8887/ while its local server runs.
+See [restored baseline and reproduction](docs/RESTORED_IDENTITY_BASELINE.md).
+Saved inference results were reused; no networks were rerun or IDs manually joined.
+The lower-gate coverage profile remains a separate experiment.
+
+**Identity regression found in the high-coverage candidate:**
+[T38/T292 return and duplicate-track audit](docs/REID_REGRESSION_20261021.md).
+Recommended identity baseline: the earlier full automatic identity checkpoint,
+with reproducible tracker profile `configs/reid/identity_checkpoint_20261019.json`.
+The newer coverage settings remain experimental; improved detection coverage
+does not establish preserved ID continuity.
+
+Clean ID-continuity view: `outputs/id-continuity-review-v1/index.html`.
+Both pending-ID and boundary displays default off. Select updated TrackTrack
+ReID IDs or the earlier automatic linked-person hypotheses, highlight one ID,
+and inspect its appearances at slow speed. These are separate result sources;
+the earlier CLIP person-linking stage has not been rerun on updated tracks.
+
+Latest person-coverage investigation and review:
+`outputs/person-coverage-review-v1/index.html`, [measured findings and reproduction](docs/PERSON_COVERAGE_20261021.md).
+Lower tracker gates recover many partially visible detections. The review
+retains unassigned detections as gray `?`, compares both full clips with the
+previous gates, and uses conservative automatic court filtering. No role tags.
+
+Current automatic-only review: `outputs/automatic-silhouettes-v1/index.html`.
+See [automatic flow and remaining assumptions](docs/AUTOMATIC_ONLY_PRESENTATION.md).
+This supersedes the manually role-labeled presentations below.
+
+Silhouette review: [display method and reproduction](docs/SILHOUETTE_PRESENTATION.md),
+`outputs/identity-court-silhouettes-v1/index.html`. Both full clips show colored
+person masks, person/raw IDs, existing role labels and a top-left player minimap.
+The overlay selector restores boxes when wanted. Original experiments are preserved.
+
 Combined tracking + identity + court-map checkpoint:
 [complete presentation](docs/IDENTITY_COURT_PRESENTATION.md),
 `outputs/identity-court-complete-final/index.html`. It shows all current player

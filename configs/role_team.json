@@ -1,0 +1,40 @@
+{
+  "model": "ViT-L-14",
+  "pretrained": "openai",
+  "crop_view": "aspect_pad_gray",
+  "samples_per_identity": 8,
+  "sample_spacing_frames": 5,
+  "minimum_crop_height": 40,
+  "minimum_crop_width": 12,
+  "minimum_samples": 3,
+  "minimum_role_similarity": 0.20,
+  "minimum_role_margin": 0.012,
+  "minimum_role_agreement": 0.625,
+  "minimum_team_separation_lab": 20.0,
+  "maximum_team_distance_lab": 40.0,
+  "minimum_team_margin_lab": 8.0,
+  "minimum_team_agreement": 0.625,
+  "minimum_team_members": 2,
+  "minimum_torso_pixels": 30,
+  "torso_fraction_xyxy": [0.25, 0.20, 0.75, 0.50],
+  "role_prompts": {
+    "player": [
+      "a photo of a person wearing a sleeveless basketball jersey and basketball shorts",
+      "a full body photo of a basketball player in a sleeveless team uniform",
+      "a basketball athlete wearing a tank top jersey with a number and shorts",
+      "a person in a basketball uniform with bare arms and bare lower legs"
+    ],
+    "referee": [
+      "a photo of a basketball referee wearing a short sleeved referee shirt and long black pants",
+      "a full body photo of a sports referee wearing a referee polo shirt and black trousers",
+      "a basketball game official in a short sleeved shirt and long dark trousers",
+      "a referee wearing an official uniform with long black pants"
+    ],
+    "other_person": [
+      "a photo of a spectator wearing ordinary everyday clothes",
+      "a full body photo of a coach wearing a suit jacket and trousers",
+      "a member of staff wearing a jacket and ordinary clothes",
+      "a person wearing casual clothing watching a game"
+    ]
+  }
+}

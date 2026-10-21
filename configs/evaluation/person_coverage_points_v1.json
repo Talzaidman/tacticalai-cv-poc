@@ -1,0 +1,777 @@
+{
+  "purpose": "Human head-point inspection annotations for evaluation only. Never read by inference or rendering.",
+  "annotation_method": "Visible head locations inspected on source frames; no fully hidden persons invented. Not exhaustive boxes or an independent accuracy benchmark.",
+  "frame_reference_size": [
+    1280,
+    720
+  ],
+  "video_sha256": {
+    "attack_clip": "57948c01993d0593c872acbf4767cea0ee530144e3ca25a17437c22ed1559f11",
+    "attack_clip2": "a23b63a847634602f2507e1a0300d045e2db9f4f16373de6e3f34524429d7e96"
+  },
+  "frames": [
+    {
+      "clip": "attack_clip",
+      "frame_idx": 0,
+      "split": "development",
+      "points": [
+        {
+          "point_xy_1280x720": [
+            230,
+            405
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            224,
+            345
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            325,
+            345
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            498,
+            363
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            570,
+            335
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            601,
+            326
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            660,
+            422
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            738,
+            258
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            771,
+            277
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            26,
+            275
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            490,
+            540
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            1182,
+            269
+          ],
+          "partially_visible": false
+        }
+      ]
+    },
+    {
+      "clip": "attack_clip",
+      "frame_idx": 55,
+      "split": "development",
+      "points": [
+        {
+          "point_xy_1280x720": [
+            184,
+            354
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            230,
+            355
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            280,
+            337
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            690,
+            302
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            744,
+            299
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            749,
+            386
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            790,
+            421
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            890,
+            357
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            886,
+            309
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            34,
+            277
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            634,
+            546
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            1077,
+            297
+          ],
+          "partially_visible": false
+        }
+      ]
+    },
+    {
+      "clip": "attack_clip",
+      "frame_idx": 104,
+      "split": "check",
+      "points": [
+        {
+          "point_xy_1280x720": [
+            82,
+            420
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            281,
+            389
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            311,
+            285
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            338,
+            320
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            633,
+            265
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            672,
+            307
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            806,
+            418
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            793,
+            394
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            859,
+            408
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            916,
+            418
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            112,
+            283
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            655,
+            555
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            1038,
+            307
+          ],
+          "partially_visible": false
+        }
+      ]
+    },
+    {
+      "clip": "attack_clip",
+      "frame_idx": 131,
+      "split": "check",
+      "points": [
+        {
+          "point_xy_1280x720": [
+            0,
+            486
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            225,
+            344
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            570,
+            288
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            690,
+            384
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            920,
+            414
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            285,
+            426
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            500,
+            287
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            700,
+            325
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            750,
+            401
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            830,
+            434
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            148,
+            281
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            670,
+            565
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            1008,
+            314
+          ],
+          "partially_visible": false
+        }
+      ]
+    },
+    {
+      "clip": "attack_clip2",
+      "frame_idx": 0,
+      "split": "development",
+      "points": [
+        {
+          "point_xy_1280x720": [
+            313,
+            331
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            374,
+            328
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            424,
+            393
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            535,
+            364
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            556,
+            339
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            284,
+            432
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            305,
+            412
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            530,
+            328
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            917,
+            341
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            1189,
+            355
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            594,
+            533
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            1040,
+            295
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            217,
+            302
+          ],
+          "partially_visible": false
+        }
+      ]
+    },
+    {
+      "clip": "attack_clip2",
+      "frame_idx": 55,
+      "split": "development",
+      "points": [
+        {
+          "point_xy_1280x720": [
+            180,
+            341
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            225,
+            408
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            594,
+            389
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            853,
+            311
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            215,
+            294
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            480,
+            287
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            408,
+            372
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            487,
+            455
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            729,
+            268
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            680,
+            484
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            936,
+            255
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            2,
+            278
+          ],
+          "partially_visible": true
+        }
+      ]
+    },
+    {
+      "clip": "attack_clip2",
+      "frame_idx": 104,
+      "split": "check",
+      "points": [
+        {
+          "point_xy_1280x720": [
+            342,
+            334
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            407,
+            308
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            544,
+            252
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            537,
+            385
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            733,
+            459
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            190,
+            353
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            310,
+            403
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            694,
+            329
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            677,
+            297
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            796,
+            447
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            379,
+            286
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            878,
+            274
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            654,
+            496
+          ],
+          "partially_visible": false
+        }
+      ]
+    },
+    {
+      "clip": "attack_clip2",
+      "frame_idx": 149,
+      "split": "check",
+      "points": [
+        {
+          "point_xy_1280x720": [
+            411,
+            277
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            604,
+            361
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            686,
+            334
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            795,
+            422
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            604,
+            492
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            454,
+            397
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            477,
+            343
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            655,
+            440
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            766,
+            389
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            710,
+            333
+          ],
+          "partially_visible": true
+        },
+        {
+          "point_xy_1280x720": [
+            54,
+            294
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            939,
+            300
+          ],
+          "partially_visible": false
+        },
+        {
+          "point_xy_1280x720": [
+            596,
+            535
+          ],
+          "partially_visible": false
+        }
+      ]
+    }
+  ]
+}

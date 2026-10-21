@@ -13,6 +13,7 @@ dynamic = ["dependencies"]
 clip-reident = ["open-clip-torch==2.0.2", "gdown==5.2.0"]
 preview = ["imageio-ffmpeg==0.6.0"]
 geometry = ["scipy==1.18.1"]
+roles = ["open-clip-torch==2.0.2", "imageio-ffmpeg==0.6.0", "scipy==1.18.1"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
@@ -21,7 +22,7 @@ dependencies = {file = ["requirements.txt"]}
 where = ["src"]
 
 [tool.setuptools.package-data]
-tacticalai = ["auto_review.html", "kalicalib_reference_review.html", "challenge_presentation.html", "gallery_review.html", "temporal_review.html", "identity_presentation.html"]
+tacticalai = ["auto_review.html", "kalicalib_reference_review.html", "challenge_presentation.html", "gallery_review.html", "temporal_review.html", "identity_presentation.html", "automatic_presentation.html", "coverage_presentation.html", "id_review.html", "role_team_review.html", "role_team_schema.json"]
 
 [project.scripts]
 tacticalai-track = "tacticalai.cli:main"

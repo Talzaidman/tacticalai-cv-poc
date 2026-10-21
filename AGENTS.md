@@ -12,4 +12,5 @@
 - Prefer simple readable Python, small composable modules, parameterized CLI/scripts, and CPU-compatible postprocessing. Avoid web backends, databases, Kubernetes, and retraining before measuring pretrained baselines.
 - Use `.gitignore` for source videos, model weights, cached data, runtime secrets, and outputs. Check model/dataset licenses before commercial use.
 - Explain limitations and provide measurable outputs; don't equate visually pleasing overlays with verified accuracy. Confirm reported metrics against annotated ground truth.
-- Present experiment results in a local web page with playable annotated videos and matching evidence, and give the user a direct link to review it.
+- For development review, open the annotated MP4 in a basic video player/window and put relevant findings and limitations in the chat. Do not build a detailed investigation website/UI for each iteration unless requested. A minimal native-controls video page and direct local video links are sufficient; preserve machine-readable evidence on disk.
+- Result presentations must use the automatic flow only. Do not display manually assigned player/referee/staff roles, role-based counts/filtering, or manual corrections as model outputs. Keep unimplemented classifications unknown. Disclose configured assumptions, offline processing, and development feedback used to tune parameters.

@@ -66,6 +66,11 @@ justify their runtime cost.
 
 ## Ready configurations and execution
 
+**21 October restoration:** `classifier-n.json` now uses the earlier executed
+30-frame identity checkpoint with explicit original association settings. The
+45-frame profiles below remain unbenchmarked alternatives; they are no longer
+identical to the active classifier profile. See [restored baseline](RESTORED_IDENTITY_BASELINE.md).
+
 `configs/reid/{off,classifier-n,dedicated-n,dedicated-s,dedicated-m}.json`
 keep detector weights `yolo26s.pt`, confidence 0.1, NMS IoU 0.7, image size
 1280, seed 0, FP32, TrackTrack, buffer **45** (1.8 s at 25 FPS) and GMC

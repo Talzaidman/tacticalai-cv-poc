@@ -1,0 +1,11 @@
+{
+  "detection_track_iou": 0.5,
+  "mask_iou": 0.3,
+  "duplicate_iou": 0.5,
+  "court_filter": true,
+  "court_margin_m": 3.0,
+  "minimum_body_court_overlap": 0.1,
+  "include_segmentation_detections": false,
+  "suppress_maskless_same_head_duplicates": true,
+  "duplicate_head_tolerance": 0.1
+}

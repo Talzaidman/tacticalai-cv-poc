@@ -1,0 +1,24 @@
+{
+  "model": "yolo26s.pt",
+  "conf": 0.1,
+  "iou": 0.7,
+  "imgsz": 1280,
+  "max_det": 100,
+  "device": "0",
+  "half": false,
+  "seed": 0,
+  "trackers": ["tracktrack"],
+  "with_reid": true,
+  "reid_model": "yolo26n-cls.pt",
+  "gmc_method": "sparseOptFlow",
+  "track_buffer": 30,
+  "tracker_overrides": {
+    "tracktrack": {
+      "track_high_thresh": 0.25,
+      "track_low_thresh": 0.1,
+      "new_track_thresh": 0.25,
+      "min_track_len": 3,
+      "tai_thr": 0.55
+    }
+  }
+}

@@ -130,14 +130,14 @@ def smooth_cameras(matrices, image_size, fps, cuts, max_gap=5):
     return result, diagnostics, measured, rejected
 
 
-def smooth_players(frames, fps, cuts, identity_field=None):
+def smooth_players(frames, fps, cuts, identity_field=None, role_filter='player'):
     """Filter each contiguous observed ID/role segment; never fill absent rows."""
     segments = []
     active = {}
     for index, frame in enumerate(frames):
         next_active = {}
         for row in frame['tracks']:
-            if row['court_xy_m'] is None or row['role'] != 'player':
+            if row['court_xy_m'] is None or (role_filter is not None and row.get('role') != role_filter):
                 continue
             if identity_field is not None and row.get(identity_field) is None:
                 continue

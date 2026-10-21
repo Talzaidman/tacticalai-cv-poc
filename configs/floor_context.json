@@ -1,0 +1,13 @@
+{
+  "training_inset_m": 2.0,
+  "minimum_training_pixels": 300,
+  "clusters": 3,
+  "minimum_cluster_fraction": 0.08,
+  "minimum_lightness": 35.0,
+  "color_distance_lab": 18.0,
+  "minimum_context_pixels": 35,
+  "minimum_floor_fraction": 0.12,
+  "context_width": 0.45,
+  "context_above_bottom": 0.3,
+  "context_below_bottom": 0.25
+}

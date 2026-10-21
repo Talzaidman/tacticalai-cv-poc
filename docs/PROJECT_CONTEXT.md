@@ -1,5 +1,35 @@
 # TacticalAI basketball video analysis — complete handoff context
 
+**Latest rendering update (2026-10-21):** `outputs/team-colors-floor-v1/` uses
+consistent team colors for silhouettes/captions/minimap (A blue, B amber,
+referees purple, unknown gray). Basic MP4 playback is at port 8890. An automatic
+floor-context display filter reduces crowd/sideline overlays without changing
+or deleting measurements. Existing predicted players and uncertain/occluded
+context are retained; some sideline referees can be hidden. Development head-point
+coverage changes 99/101 -> 93/101, partial remains 24/25; not filter accuracy.
+89 CPU tests pass. See [method and reproduction](TEAM_COLORS_FLOOR_20261021.md).
+
+**Latest display update (2026-10-21):** `outputs/unlinked-people-v2/` adds actual
+unlinked YOLO26s detections to the role/team baseline, with cached segmentation
+or a box fallback. Original identity/role/team/position decisions are preserved.
+Unlinked identities/classes/court positions stay null. Development review now
+uses direct MP4s in a basic player at port 8889 with notes in chat; avoid building
+new elaborate investigation pages unless requested. Existing point coverage is
+72/101 -> 99/101 (partial 8/25 -> 24/25), a development diagnostic, not accuracy.
+See [method, limitations and reproduction](UNLINKED_PEOPLE_20261021.md).
+
+**Latest feature checkpoint (2026-10-21):** Automatic role/team classification
+and consolidated exports now build on the unchanged restored identity baseline.
+Review http://127.0.0.1:8888/ (`outputs/roles-teams-final-v1/`). Generic CLIP ViT-L/14
+roles plus masked torso-color grouping produce anonymous clip-local Team A/B;
+no manual labels enter inference. The small development spot check has 39/41
+correct roles and 29/31 correct teams including abstentions, with two unknowns
+in each task; this is not held-out-video accuracy. Both full clips, CSV/JSONL,
+evidence, scoped historical/current timings and configurations are available.
+76 CPU tests pass. See [execution, limitations and reproduction](ROLES_TEAMS_20261021.md).
+The older checkpoints below remain historical; ball, jersey/roster identity,
+off-screen prediction and tactics are still unimplemented.
+
 _Compiled from a ChatGPT discussion on 2026-10-15 for continuation in Codex in VS Code._
 
 **Current continuation status (2026-10-18):** The homography/projection benchmark
