@@ -1,0 +1,18 @@
+{
+  "repository": "446f6e6e79/YOLO-basketball-fineTuned",
+  "revision": "8d30eddfcc47728f73de9beda09291854f7970f2",
+  "weights_url": "https://huggingface.co/446f6e6e79/YOLO-basketball-fineTuned/resolve/8d30eddfcc47728f73de9beda09291854f7970f2/best.pt",
+  "weights_sha256": "129fa18d0811ed2ed3d0529e73b59e405f900034fc14b5a2090e8c17cc427162",
+  "model_card_url": "https://huggingface.co/446f6e6e79/YOLO-basketball-fineTuned/blob/8d30eddfcc47728f73de9beda09291854f7970f2/README.md",
+  "uploader_declared_license": "MIT",
+  "license_caveat": "Uploader metadata does not establish upstream architecture, training-data or commercial-use rights. Ultralytics licensing must also be reviewed.",
+  "training_domain": "Custom images from one university basketball game according to model card. Generalization to these clips is unvalidated.",
+  "verified_checkpoint_metadata": {
+    "architecture": "YOLO26m",
+    "ultralytics_version": "8.4.48",
+    "epochs": 300,
+    "ball_class": 0,
+    "ball_class_name": "Ball"
+  },
+  "use": "Class 0 Ball only. All jersey/team/referee classes are excluded; no roles, jersey numbers or possession labels are imported."
+}

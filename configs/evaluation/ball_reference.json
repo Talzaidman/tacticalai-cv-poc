@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "purpose": "Evaluation only. Never read by inference/tracking.",
+  "annotation_source": "Assistant visual review of unannotated source frames at 1280x720, before alternative-model inference.",
+  "quality": "Draft approximate centers; not independently human-verified ground truth. Ambiguous/occluded frames are unknown and excluded, not negative examples.",
+  "coordinate_size": [1280, 720],
+  "match_radius_px": 14,
+  "split_policy": "Fixed development/evaluation frame assignments before alternative-model results; same clips, temporally correlated, not held-out-video accuracy.",
+  "clips": {
+    "attack_clip": {
+      "video_sha256": "57948c01993d0593c872acbf4767cea0ee530144e3ca25a17437c22ed1559f11",
+      "samples": [
+        {"frame_idx": 0, "split": "development", "visibility": "visible", "center_xy": [184, 384]},
+        {"frame_idx": 10, "split": "evaluation", "visibility": "unknown", "center_xy": null},
+        {"frame_idx": 20, "split": "development", "visibility": "unknown", "center_xy": null},
+        {"frame_idx": 30, "split": "evaluation", "visibility": "visible", "center_xy": [166, 410]},
+        {"frame_idx": 40, "split": "development", "visibility": "visible", "center_xy": [130, 426]},
+        {"frame_idx": 50, "split": "evaluation", "visibility": "visible", "center_xy": [174, 312]},
+        {"frame_idx": 60, "split": "development", "visibility": "unknown", "center_xy": null},
+        {"frame_idx": 70, "split": "evaluation", "visibility": "unknown", "center_xy": null},
+        {"frame_idx": 80, "split": "development", "visibility": "visible", "center_xy": [330, 358]},
+        {"frame_idx": 90, "split": "evaluation", "visibility": "visible", "center_xy": [348, 358]},
+        {"frame_idx": 100, "split": "evaluation", "visibility": "visible", "center_xy": [364, 218]},
+        {"frame_idx": 110, "split": "development", "visibility": "unknown", "center_xy": null},
+        {"frame_idx": 120, "split": "development", "visibility": "visible", "center_xy": [685, 95]},
+        {"frame_idx": 130, "split": "evaluation", "visibility": "unknown", "center_xy": null},
+        {"frame_idx": 140, "split": "development", "visibility": "unknown", "center_xy": null},
+        {"frame_idx": 149, "split": "evaluation", "visibility": "unknown", "center_xy": null}
+      ]
+    },
+    "attack_clip2": {
+      "video_sha256": "a23b63a847634602f2507e1a0300d045e2db9f4f16373de6e3f34524429d7e96",
+      "samples": [
+        {"frame_idx": 0, "split": "development", "visibility": "visible", "center_xy": [251, 476]},
+        {"frame_idx": 12, "split": "evaluation", "visibility": "unknown", "center_xy": null},
+        {"frame_idx": 24, "split": "development", "visibility": "visible", "center_xy": [337, 474]},
+        {"frame_idx": 36, "split": "evaluation", "visibility": "visible", "center_xy": [440, 495]},
+        {"frame_idx": 48, "split": "development", "visibility": "visible", "center_xy": [483, 471]},
+        {"frame_idx": 60, "split": "evaluation", "visibility": "visible", "center_xy": [542, 483]},
+        {"frame_idx": 72, "split": "development", "visibility": "unknown", "center_xy": null},
+        {"frame_idx": 84, "split": "evaluation", "visibility": "unknown", "center_xy": null},
+        {"frame_idx": 96, "split": "development", "visibility": "visible", "center_xy": [783, 572]},
+        {"frame_idx": 108, "split": "evaluation", "visibility": "visible", "center_xy": [744, 460]},
+        {"frame_idx": 120, "split": "development", "visibility": "visible", "center_xy": [650, 392]},
+        {"frame_idx": 132, "split": "evaluation", "visibility": "unknown", "center_xy": null},
+        {"frame_idx": 144, "split": "development", "visibility": "visible", "center_xy": [695, 407]},
+        {"frame_idx": 156, "split": "evaluation", "visibility": "visible", "center_xy": [730, 337]},
+        {"frame_idx": 168, "split": "development", "visibility": "visible", "center_xy": [765, 229]},
+        {"frame_idx": 174, "split": "evaluation", "visibility": "unknown", "center_xy": null}
+      ]
+    }
+  }
+}

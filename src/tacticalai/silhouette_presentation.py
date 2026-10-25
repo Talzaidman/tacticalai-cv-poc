@@ -53,6 +53,37 @@ def observation_color(row, mode='identity'):
     return (170, 170, 170)
 
 
+def draw_ball_detections(out, frame, sx, sy):
+    """Show raw detector evidence, not just the tracker's selected hypothesis."""
+    ball = frame['ball']
+    orange = (0, 165, 255)
+    detections = frame.get('ball_motion_accepted_detections',
+                           frame.get('ball_raw_detections', ball.get('candidates', [])))
+    for row in detections:
+        x1, y1, x2, y2 = row['bbox_xyxy']
+        x, y = round((x1+x2)*sx/2), round((y1+y2)*sy/2)
+        radius = max(16, round(max((x2-x1)*sx, (y2-y1)*sy)/2)+5)
+        cv2.circle(out, (x, y), radius+2, (0, 0, 0), 7, cv2.LINE_AA)
+        cv2.circle(out, (x, y), radius, orange, 4, cv2.LINE_AA)
+        cv2.circle(out, (x, y), 3, orange, -1, cv2.LINE_AA)
+        label = f"BALL candidate {row['det_confidence']:.2f}"
+        text(out, label, (max(2, min(x+radius+5, out.shape[1]-230)),
+                         max(22, min(y-radius-5, out.shape[0]-8))), .52, orange)
+    point = ball.get('center_image_xy')
+    if point is not None and not detections:
+        x, y = np.rint(np.asarray(point)*[sx, sy]).astype(int)
+        cv2.circle(out, (x, y), 18, (0, 0, 0), 7, cv2.LINE_AA)
+        cv2.circle(out, (x, y), 16, orange, 4, cv2.LINE_AA)
+        text(out, 'BALL '+ball['status'], (max(2, min(x+22, out.shape[1]-200)), max(22, y-22)),
+             .52, orange)
+    predicted = ball.get('predicted_center_image_xy')
+    if predicted is not None:
+        x, y = np.rint(np.asarray(predicted)*[sx, sy]).astype(int)
+        cv2.drawMarker(out, (x, y), (0, 0, 0), cv2.MARKER_TILTED_CROSS, 24, 5, cv2.LINE_AA)
+        cv2.drawMarker(out, (x, y), (190, 190, 190), cv2.MARKER_TILTED_CROSS, 24, 2, cv2.LINE_AA)
+        text(out, 'prediction only', (max(2, min(x+18, out.shape[1]-200)), max(22, y+25)), .45)
+
+
 def render(image, frame, lines, color_mode='identity'):
     out = cv2.resize(image, (1280, 720))
     sx, sy = 1280 / image.shape[1], 720 / image.shape[0]
@@ -76,6 +107,16 @@ def render(image, frame, lines, color_mode='identity'):
                           observation_color(row, color_mode), 1, cv2.LINE_AA)
         text(out, row.get('display_caption') or f"{row['display_label']} / {row['track_id']}",
              (max(0, round(x*sx)), max(20, round(y*sy)-6)), row.get('display_label_scale', .46), observation_color(row, color_mode))
+    if 'ball' in frame:
+        ball = frame['ball']
+        possession = frame['possession']
+        owner = possession['controller_person_id']
+        text(out, f"BALL {ball['status']} | estimated controller: {owner if owner is not None else 'unknown'}",
+             (20, 660), .55, (20, 160, 255))
+        policy = ('motion-supported candidates' if 'ball_motion_accepted_detections' in frame
+                  else 'ALL raw ball detections')
+        text(out, f'Orange = {policy} (may be false); gray X = prediction | offline',
+             (20, 686), .43)
     panel = np.full((190, 304, 3), (30, 40, 16), np.uint8)
     scale, origin = 9.6, np.array([17, 29])
     for line in lines:
@@ -89,7 +130,9 @@ def render(image, frame, lines, color_mode='identity'):
         cv2.circle(panel, (x, y), 3, color, -1, cv2.LINE_AA)
         text(panel, row['display_label'], (max(0, min(x+4, 260)), max(20, y-4)), .3, color)
     method = frame['calibration']['method']
-    status = 'estimated' if 'gap_estimate' in method else 'unavailable' if method == 'unavailable' else 'smoothed'
+    status = ('estimated' if 'gap_estimate' in method else
+              'unavailable' if method == 'unavailable' else
+              'automatic' if 'automatic' in method and 'smoothed' not in method else 'smoothed')
     text(panel, 'COURT | '+status, (8, 16), .38)
     if color_mode == 'team':
         for x, label, color in ((14, 'A', TEAM_COLORS['A']), (72, 'B', TEAM_COLORS['B']),
@@ -98,7 +141,19 @@ def render(image, frame, lines, color_mode='identity'):
             text(panel, label, (x+7, 185), .32, color)
     else:
         text(panel, 'Approximate person floor positions', (8, 183), .32)
+    if 'ball' in frame:
+        possession = frame['possession']
+        xy = possession['minimap_xy_m']
+        if xy is not None:
+            point = tuple(np.rint(np.asarray(xy)*scale+origin).astype(int))
+            cv2.circle(panel, point, 7, (0, 0, 0), 3, cv2.LINE_AA)
+            cv2.circle(panel, point, 6, (20, 140, 255), 2, cv2.LINE_AA)
+        cv2.rectangle(panel, (0, 170), (303, 189), (30, 40, 16), -1)
+        text(panel, 'Orange ring = estimated controller' if xy is not None else 'Ball map unknown (no measured floor XY)',
+             (5, 184), .31, (20, 160, 255))
     out[10:200, 10:314] = panel
+    if 'ball' in frame:
+        draw_ball_detections(out, frame, sx, sy)
     return out
 
 

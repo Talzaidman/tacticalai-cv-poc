@@ -1,5 +1,17 @@
 # TacticalAI CV POC — YOLO26 baseline
 
+**Experimental ball tracking (25 October 2026):**
+Independent ball detection/tracking, conservative controller estimates and an
+orange minimap ring at the estimated controller's floor position are available.
+The ring is not a measured airborne-ball position; uncertain control stays
+unknown. Supports existing automatic person/camera caches or a fresh, separately
+labelled person baseline. **Detection quality is currently inadequate:** a separate
+local-only camera-motion filter reduced false candidates from 42 to 4 on eight
+draft reserved visible-ball samples, but recall stayed 1/8; clip 1 remains
+unresolved. These are same-video diagnostics, not verified accuracy.
+[Filtered clips](http://127.0.0.1:8892/) /
+[method, commands and limitations](docs/BALL_TRACKING.md).
+
 **Latest video: team colors and experimental sideline filtering.**
 [Clip 1](http://127.0.0.1:8890/attack_clip/annotated.mp4) /
 [Clip 2](http://127.0.0.1:8890/attack_clip2/annotated.mp4).
@@ -122,6 +134,15 @@ Current work and deferred improvements are tracked in
 [docs/PROJECT_TASKS.md](docs/PROJECT_TASKS.md), including court boundary control,
 jersey/role validation and the confirmed ID 87-to-96 failure. TrackTrack + ReID
 with buffer 30 is the current development candidate; accuracy remains unverified.
+
+## Ball detection + tracking notebook (Colab, not yet executed)
+
+[`notebooks/colab_ball_benchmark.ipynb`](notebooks/colab_ball_benchmark.ipynb) is
+standalone: it reads both clips from `MyDrive/TacticalAI/data/raw/`, runs WASB-SBDT
+(basketball weights), Roboflow RF-DETR basketball and SAM 3 ("basketball"), and plays
+annotated videos inline. Secrets: `ROBOFLOW_API_KEY`, `HF_TOKEN`. No source upload.
+Details and limitations: [docs/BALL_TRACKING.md](docs/BALL_TRACKING.md).
+Regenerate with `python scripts/build_ball_notebook.py`.
 
 ## Occlusion experiment (current notebook)
 

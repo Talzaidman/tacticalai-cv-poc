@@ -1,5 +1,28 @@
 # TacticalAI basketball video analysis — complete handoff context
 
+**Ball experiment added (2026-10-25):** Independent ball tracking and experimental
+body-proximity controller estimation now have a reproducible CPU/Colab CLI.
+The minimap ring uses the estimated controller's floor position, never an
+airborne-ball homography. Unknowns remain explicit. This checkout lacked prior
+automatic output caches, so a new BoT-SORT/no-ReID + automatic KaliCalib baseline
+was used, not the earlier accepted player identity setup. See
+[method and reproduction](BALL_TRACKING.md). Earlier statements that ball
+tracking is unimplemented are historical; accurate possession, hand contact,
+3D ball position, jersey/roster identity and tactics remain unverified or absent.
+
+**Ball quality correction:** User review exposed crowd false positives in the
+basketball-specific YOLO26m run. Its 106/150 and 132/175 observed-frame counts
+were not true-ball detection rates. A local-only camera-compensated background
+filter now has separate full-clip output in `outputs/ball-motion-filter-v1`,
+with basic playback at <http://127.0.0.1:8892/>. On eight draft reserved visible
+reference frames, accepted false candidates fell 42 -> 4 but recall remained
+1/8; clip 1 localized 0/4. Do not present this as solved ball tracking or
+possession. No labels enter inference; draft labels only measure/tune
+development diagnostics. The user declined resuming another model download;
+use local assets only unless permission changes. Source people/cameras/raw
+detections remain unchanged, ReID off and GMC sparseOptFlow inherited from the
+fresh baseline. See [results and reproduction](BALL_TRACKING.md).
+
 **Latest rendering update (2026-10-21):** `outputs/team-colors-floor-v1/` uses
 consistent team colors for silhouettes/captions/minimap (A blue, B amber,
 referees purple, unknown gray). Basic MP4 playback is at port 8890. An automatic
