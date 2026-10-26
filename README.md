@@ -135,7 +135,18 @@ Current work and deferred improvements are tracked in
 jersey/role validation and the confirmed ID 87-to-96 failure. TrackTrack + ReID
 with buffer 30 is the current development candidate; accuracy remains unverified.
 
-## Ball detection + tracking notebook (Colab, not yet executed)
+## Local ball/player fusion (26 October 2026)
+
+The latest Colab ball results are downloaded locally. Both completed videos in
+`outputs/players-ball-control-v6/` combine RF-DETR/Kalman ball positions with the
+existing automatic player/team/court presentation, cached wrist poses and bounded
+offline dribble continuity. The current display combines team silhouettes and the
+mini-map with a solid assigned-player box and ball marker/trail, using the same
+style for filled positions. Raw/inferred
+evidence remains available in JSON/CSV. Continue on CPU with `python -m tacticalai.ball_fusion_cli`; Colab is
+only needed for future GPU inference. See [local instructions and limitations](docs/LOCAL_BALL_FUSION.md).
+
+## Ball detection + tracking notebook (initial preparation)
 
 [`notebooks/colab_ball_benchmark.ipynb`](notebooks/colab_ball_benchmark.ipynb) is
 standalone: it reads both clips from `MyDrive/TacticalAI/data/raw/`, runs WASB-SBDT

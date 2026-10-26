@@ -1,5 +1,108 @@
 # Experimental ball tracking and controller minimap
 
+### Current notebook defaults: both clips, filtered presentation
+
+`RF_CLIP_NAMES` now includes both clips. `RF_REUSE_DIRS` maps clip 1 to its saved
+`ball-notebook-20261026-205848` run and clip 2 to `ball-notebook-20261026-210537`.
+Available caches are reused per clip; only missing clips require fresh inference.
+Set this mapping to `{}` to rerun the detector on both. Existing outputs are preserved.
+
+`SHOW_RAW_CANDIDATES = False` hides all raw candidate rings, including rejected
+detections. `SHOW_BASELINE = False` displays only the Kalman videos and filtered
+comparison panels; baseline outputs/metrics and raw JSON remain saved. Accepted
+false detections are still possible: this is automatic filtering, not an oracle
+or manual ground-truth correction. Inferred positions retain their distinct labels.
+Local tests cover both cached clips and verify that raw rings are absent by default.
+
+## Clip-2 temporal comparison: Kalman and bounded interpolation
+
+The saved clip-2 RF-DETR tiles run completed on 175 frames: raw hits on 9/11 draft
+checkpoints, 9 accepted correct / 1 accepted wrong checked position, and 23 off-target
+candidates. This motivated a temporal comparison, not a new accuracy claim.
+
+`scripts/ball_temporal.py` provides CPU-only constant-velocity Kalman filtering,
+Mahalanobis innovation gating, a hard image-space residual limit, and an elapsed-time
+speed gate. Even a high-confidence candidate cannot bypass these gates. Three
+coherent frames confirm a new segment; predictions expire after 0.20 seconds.
+Offline linear interpolation fills only gaps of at most 0.16 seconds between
+accepted endpoints in the same segment. Long gaps and resets remain unknown.
+These image-space heuristics are configurable in notebook `KALMAN_SETTINGS`;
+they are not physical court constraints and may reject true bounces, shots, camera
+motion, or fast changes of direction. Persistent false detections can still initialize
+the wrong track. This adds ball-position filtering, not possession identification.
+
+The notebook now compares the unchanged legacy tracker against a `-Kalman` output
+on identical RF-DETR tiles candidates. `RF_REUSE_DIR` defaults to the saved
+`ball-notebook-20261026-210537` Drive run, so Run All reprocesses its detections without
+GPU inference or a Roboflow key when the files are available. Cache reuse checks
+checkpoint, selected variant, and frame count. That older run has no source-video
+hash, so `source_hash_verified` is explicitly false. Set `RF_REUSE_DIR = None` to
+force fresh inference. Each new output folder preserves the source run.
+
+Output JSON preserves raw candidates, accepted measurement coordinates, filtered
+positions/covariance, per-candidate gate rejections, segment IDs, and inference
+sources. Interpolation/extrapolation has null measurement and confidence. Only
+accepted measurements contribute to observed checkpoint scores. Cyan rings labelled
+`inferred` show interpolation; gray crosses show extrapolation. Green trails now
+break at missing/inferred frames and segment changes for both trackers. Separate
+counts report interpolated frames and motion rejections; tracker time is measured
+locally, while reused detector time is marked historical.
+
+Nine temporal tests (including the cached notebook comparison with synthetic
+frames) and nine RF-DETR tests pass. The new tracker has **not yet been evaluated
+on the actual clip-2 detections**. The executed pre-change notebook is preserved
+under ignored `outputs/rf-detr-review-20261026/clip2-before-kalman-*.ipynb`.
+
+## RF-DETR baseline review and controlled sweep (26 October 2026)
+
+The repaired GPU path subsequently completed on the Colab T4: 150 clip-1 frames,
+RF-DETR ONNX behind Roboflow's adapter, CUDAExecutionProvider active. The saved
+notebook reports full-frame inference at 7.818 s and full-plus-tiles at 40.386 s.
+Both found the ball on only 3/8 draft development checkpoints. Full-frame tracking
+had 3 correct / 0 wrong checked positions and 9 off-target candidates; tiles had
+3 correct / 1 wrong and 24 off-target candidates. Increased detection coverage
+therefore did not improve the checked recall. These eight points are not verified
+held-out accuracy. Review frames also show gaps during possession and off-target
+tracking in the tiled output.
+
+The notebook now defaults to `RF_SWEEP = True`: the original full-frame and 2x2
+baselines, full-plus-3x3 crops at 40% size, a lower candidate cutoff (0.05 versus
+0.10), a lower tracker cutoff (0.10 versus 0.25), and a stricter baseline tracker
+cutoff (0.40). The table in the notebook lists each variant. All use checkpoint
+`/13`, the same clip, merge/association code, six-frame gap, and 0.6 reinitialization
+threshold. Tight variants share inference at 0.05 and filter afterward; baselines
+retain their original 0.10 inference. Shared view time is charged to each variant;
+runtime values are not independent isolated measurements. No evaluation point is
+used as an inference prior. WASB and SAM 3 are skipped for this focused sweep.
+
+Eight local regression tests pass; the **new sweep has not run in Colab**. The
+executed baseline notebook, extracted MP4s, sampled frames, and baseline summary
+are preserved locally under ignored `outputs/rf-detr-review-20261026/`.
+
+## RF-DETR Colab repair (26 October 2026)
+
+The saved Colab attempt failed before full RF-DETR inference: ONNX Runtime fell
+back to CPU because CUDA 12 libraries were missing, and the architecture check
+mistook Roboflow's generic adapter for the actual detector. SAM 3 returned a gated
+repository error with access awaiting review. These failures are not accuracy results.
+
+The current notebook requests `basketball-player-detection-3-ycjdo/13` on clip 1,
+skips WASB by default (`RUN_WASB = False`), and enables optional SAM 3. RF-DETR
+now uses a separate Python 3.11 environment with Torch 2.6.0 / torchvision 0.21.0
+CUDA 12.4 wheels, `inference-gpu==1.8.3`, and
+`onnxruntime-gpu[cuda,cudnn]==1.21.1`. It preloads CUDA libraries, verifies the
+adapter's underlying RF-DETR class and active GPU provider, and runs a three-frame
+full-frame/tiled smoke test before processing the clip. A CPU fallback stops the run.
+
+Each run saves `rf_environment.txt`, `rf_raw_<clip>.json.smoke.json`, and full-run
+JSON with backend, device, providers, and package versions. SAM 3 setup/access
+errors are recorded in `sam3_setup_error.json` and the summary without discarding
+RF-DETR results. Keys stay in hidden runtime prompts or Colab Secrets.
+
+Local regression tests and Linux/Python 3.11 dependency resolution passed. The
+repaired GPU path has **not yet been executed in Colab**. Restart from setup and
+Run All; the first isolated environment installation can take several minutes.
+
 ## Colab three-model benchmark (prepared 25 October 2026, NOT yet executed)
 
 Local probes showed the remaining blocker is the detector, so

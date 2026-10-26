@@ -1,5 +1,59 @@
 # TacticalAI basketball video analysis — complete handoff context
 
+**Latest combined presentation:** `outputs/players-ball-control-v6/` restores the
+automatic team-colored silhouettes/person captions and mini-map, while retaining
+v5's solid assigned-player box and orange ball marker/trail for both clips. Filled
+assignments share the same style, per user preference, with evidence flags preserved.
+Only the assigned player has a bbox overlay. The map ring is the controller's floor
+position; airborne ball coordinates are never projected. Source detections, poses,
+association and smoothing remain unchanged. The older display preferences below
+describe earlier versions; use `--player-presentation clean` to restore v5.
+
+**Current display preference:** `outputs/players-ball-control-v5/` shows only a
+solid assigned-player box plus ball marker and short trail on original footage,
+for both clips. User explicitly requested identical styling for filled assignments
+and ball positions. No dashed/cyan/debug status overlays or other player/map
+overlays are shown. Inference flags and raw/smoothed assignments remain preserved
+in JSON/CSV; uniform styling is not verified measurement accuracy. The v4
+association and continuity logic is unchanged.
+
+**Dribble continuity update:** Current local output is
+`outputs/players-ball-control-v4/`. A bounded offline pass fills only unknown gaps
+bracketed by measured support for the same controller, with nearby ball evidence,
+unchanged ball/person/camera segments and no strong rival evidence. Gaps are capped
+at 0.60 s; missing player boxes may be interpolated for at most 0.12 s and are
+explicitly inferred rather than new detections. Dashed cyan boxes distinguish
+continuity from current support; raw assignments remain in `possession_raw`.
+Clip 2's reviewed P221 dribble changes from five runs to one by filling 21 frames;
+this is a continuity metric, not accuracy. All detector/pose/player caches remain
+unchanged. See [current method](LOCAL_BALL_FUSION.md).
+
+**Wrist association update (2026-10-26):** User authorized local model downloads
+and computation ("on this machine you can do whatever") for this CV work; the
+older local-assets-only download restriction is superseded. The latest local
+output is `outputs/players-ball-control-v3/` (<http://127.0.0.1:8894/>).
+Official YOLO26n-pose ran on CPU and cached near-ball wrists under
+`outputs/ball-contact-pose-v1/`. Wrist/silhouette geometry and temporal measured
+support replace broad-box proximity; brief continuity is explicitly inferred.
+Ball/player source measurements stay unchanged. Clip-2 assignment coverage is
+42 measured-support + 16 continuity / 175 frames, not possession accuracy.
+Some accepted ball detections remain wrong, including frame 96. Both clips were
+rendered and fully decoded; 36 relevant tests pass. See
+[current method and local reproduction](LOCAL_BALL_FUSION.md).
+
+**Local continuation (2026-10-26):** All 15 files from the latest Colab
+`ball-notebook-20261026-212056` result are now archived locally under
+`outputs/colab-ball-20261026-212056/`, with transfer hashes. Continue postprocessing
+on this PC using `python -m tacticalai.ball_fusion_cli`; GPU inference stays optional
+in Colab. Completed `outputs/players-ball-control-v1/` combines the exported RF-DETR
+tiles/Kalman ball with the unchanged automatic `team-colors-floor-v1` player cache.
+Green player boxes mark experimental repeated-body-proximity control; unknowns
+remain explicit and inferred ball points cannot establish control. No model
+inference was rerun. Both full clips decode correctly; control is estimated on
+13/150 and 16/175 frames, not verified possession accuracy. Ball court XY remains
+null; only the controller's floor point receives a map ring. See
+[local method, outputs, checks and reproduction](LOCAL_BALL_FUSION.md).
+
 **Ball experiment added (2026-10-25):** Independent ball tracking and experimental
 body-proximity controller estimation now have a reproducible CPU/Colab CLI.
 The minimap ring uses the estimated controller's floor position, never an
