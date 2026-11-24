@@ -4,6 +4,15 @@ import hashlib
 import json
 
 
+def json_default(value):
+    """Serialize NumPy-like evidence without weakening null/NaN validation."""
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    if hasattr(value, "item"):
+        return value.item()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with open(path, "rb") as stream:
@@ -46,4 +55,4 @@ def write_rows(writer, rows):
 
 
 def write_json(path, value):
-    path.write_text(json.dumps(value, indent=2, allow_nan=False), encoding="utf-8")
+    path.write_text(json.dumps(value, indent=2, allow_nan=False, default=json_default), encoding="utf-8")

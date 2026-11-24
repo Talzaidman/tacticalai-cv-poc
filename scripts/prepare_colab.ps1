@@ -3,7 +3,9 @@ Build the private Colab upload folder. Run from any working directory.
 Original videos are copied without modification; nothing is uploaded.
 #>
 [CmdletBinding()]
-param()
+param(
+    [string[]]$Videos = @('data/raw/attack_clip.mp4', 'data/raw/attack_clip2.mp4')
+)
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -58,14 +60,23 @@ New-Item -ItemType Directory -Path $codeDirectory, $videoDirectory -Force | Out-
 Copy-Item -LiteralPath $archivePath -Destination (Join-Path $codeDirectory 'tacticalai-source.zip') -Force
 
 $manifest = @(
-    foreach ($name in @('attack_clip.mp4', 'attack_clip2.mp4')) {
-        $original = Join-Path $projectRoot "data/raw/$name"
+    foreach ($relativePath in $Videos) {
+        $original = Join-Path $projectRoot $relativePath
+        if (-not (Test-Path -LiteralPath $original -PathType Leaf)) {
+            throw "Missing requested video: $relativePath"
+        }
+        $name = Split-Path -Leaf $original
         $copy = Join-Path $videoDirectory $name
         Copy-Item -LiteralPath $original -Destination $copy -Force
         $originalHash = (Get-FileHash -LiteralPath $original -Algorithm SHA256).Hash
         $copyHash = (Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash
         if ($originalHash -ne $copyHash) { throw "Video copy verification failed: $name" }
-        [pscustomobject]@{ file = "data/raw/$name"; sha256 = $copyHash; bytes = (Get-Item -LiteralPath $copy).Length }
+        [pscustomobject]@{
+            file = "data/raw/$name"
+            source = $relativePath.Replace('\', '/')
+            sha256 = $copyHash
+            bytes = (Get-Item -LiteralPath $copy).Length
+        }
     }
     [pscustomobject]@{
         file = 'code/tacticalai-source.zip'

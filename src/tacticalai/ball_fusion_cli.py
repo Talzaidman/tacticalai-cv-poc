@@ -28,9 +28,19 @@ from .court import floor_lines
 from .export import sha256, write_json
 from .identity_presentation import text
 from .silhouette_presentation import render
+from .video_set import LEGACY_CLIPS, resolve_clips
 
-CLIPS = ('attack_clip', 'attack_clip2')
+CLIPS = LEGACY_CLIPS
 COURT = dict(length_m=28., width_m=15., key_depth_m=5.8, key_width_m=4.9)
+DEFAULT_BALL_PREFIX = 'RF-DETR-tiles-Kalman'
+PROTECTED_PEOPLE_FRAME_KEYS = ('frame_idx', 'timestamp_s', 'calibration',
+                               'image_to_court_h', 'tracks')
+
+
+def ball_result_paths(folder, prefix, clip):
+    if not prefix or any(char in prefix for char in ('/', '\\')):
+        raise ValueError('Ball prefix must be a filename prefix')
+    return folder/f'{prefix}_{clip}.json', folder/f'{prefix}_{clip}.mp4'
 
 
 def people_lineage(source):
@@ -61,8 +71,8 @@ def load_ball(path, video, info):
     exported = video_info(video)
     if any(exported[k] != info[k] for k in ('width', 'height', 'frames', 'fps')):
         raise ValueError('Ball export and local source have different dimensions/frame timing')
-    if data['config'].get('tracker') != 'kalman_cv_gated_interpolation':
-        raise ValueError('Expected the exported Kalman solution')
+    if data['config'].get('tracker') not in ('kalman_cv_gated_interpolation', 'sam3_native_video_track'):
+        raise ValueError('Unsupported exported ball tracker')
     if len(data['tracked']) != info['frames'] or len(data['detections']) != info['frames']:
         raise ValueError('Ball frame count differs')
     for index, point in enumerate(data['tracked']):
@@ -141,6 +151,12 @@ def combine_frames(people, balls, fps, config=BallConfig(), association='legacy'
                      ball_court_position_reason='image_space_ball_may_be_airborne')
         output.append(frame)
     return output
+
+
+def player_camera_data_preserved(original, fused):
+    """Check measurements owned by the player/camera pipeline, not its ball placeholders."""
+    return all(key in fused and fused[key] == value for key, value in original.items()
+               if key in PROTECTED_PEOPLE_FRAME_KEYS)
 
 
 def add_ball_trails(frames,info,seconds=.8):
@@ -275,7 +291,8 @@ def run(args):
     started = time.perf_counter()
     report = dict(status='running',automatic_only=True,manual_labels_used=False,
                   neural_inference_rerun=False,offline_processing=True,device='cpu',
-                  ball_source=str(args.ball_results.resolve()),people_source=str(args.people_results.resolve()),
+                  ball_source=str(args.ball_results.resolve()),ball_prefix=args.ball_prefix,
+                  people_source=str(args.people_results.resolve()),
                   people_lineage=people_lineage(args.people_results),
                   possession_configuration=asdict(config),association=args.association,
                   temporal_control_configuration=asdict(control_config),clips={},accuracy_metrics=None,
@@ -298,20 +315,21 @@ def run(args):
                       'These development clips and thresholds are not held-out accuracy evaluation.'])
     write_json(args.output/'experiment.json',report)
     try:
-        for clip in CLIPS:
+        clip_videos = resolve_clips(args.videos, args.clips)
+        for clip, video in clip_videos:
             tick=time.perf_counter()
             target=args.output/clip;target.mkdir()
-            video=args.videos/(clip+'.mp4');info=video_info(video)
+            info=video_info(video)
             people,provenance=load_source(args.people_results,clip,info)
-            ball_path=args.ball_results/f'RF-DETR-tiles-Kalman_{clip}.json'
-            balls=load_ball(ball_path,args.ball_results/f'RF-DETR-tiles-Kalman_{clip}.mp4',info)
+            ball_path,ball_video=ball_result_paths(args.ball_results,args.ball_prefix,clip)
+            balls=load_ball(ball_path,ball_video,info)
             poses=load_pose(args.pose_results,clip,info,ball_path,provenance) if args.pose_results else None
             frames=combine_frames(people,balls,info['fps'],config,args.association,control_config,poses)
             if args.smooth_control:
                 frames,smoothing=smooth_control_gaps(frames,info['fps'],smoothing_config)
                 write_json(target/'control_smoothing.json',smoothing)
             add_ball_trails(frames,info,args.ball_trail_s)
-            assert all(all(frame[key]==value for key,value in original.items())
+            assert all(player_camera_data_preserved(original,frame)
                        for original,frame in zip(people,frames)), 'Original player/camera data changed'
             with (target/'frames.jsonl').open('w',encoding='utf8') as stream:
                 for frame in frames:stream.write(json.dumps(frame,allow_nan=False)+'\n')
@@ -346,7 +364,7 @@ def run(args):
             '<main style="display:flex;flex-wrap:wrap;gap:20px">'+
             ''.join(f'<section style="flex:1;min-width:380px"><h2>Clip {i}</h2>'
                     f'<video controls loop preload="auto" style="width:100%" src="{clip}/annotated.mp4"></video></section>'
-                    for i,clip in enumerate(CLIPS,1))+
+                    for i,(clip,_) in enumerate(clip_videos,1))+
             '</main><p style="color:#aaa;font-size:13px">Offline estimates. Filled assignments and inferred ball positions '
             'share the same visual style; measurement/inference flags are preserved in JSON/CSV. Accuracy remains unverified.</p>'
             '<p style="color:#aaa;font-size:13px">When shown, the mini-map ring marks the assigned player\'s floor position, not the airborne ball.</p>'
@@ -358,8 +376,11 @@ def run(args):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ball-results',type=Path,required=True)
+    parser.add_argument('--ball-prefix',default=DEFAULT_BALL_PREFIX)
     parser.add_argument('--people-results',type=Path,required=True)
     parser.add_argument('--videos',type=Path,default=Path('data/raw'))
+    parser.add_argument('--clips',nargs='+',
+                        help='Video filename stems to process; defaults to the historical two clips')
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--confirmation-s',type=float,default=.12)
     parser.add_argument('--min-control-score',type=float,default=.55)

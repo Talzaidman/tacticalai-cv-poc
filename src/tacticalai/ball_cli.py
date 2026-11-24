@@ -20,12 +20,13 @@ from .ball import BallConfig, BallTracker, PossessionEstimator, tile_windows
 from .calibration import project_track
 from .calibration_cli import video_info
 from .court import floor_lines
-from .export import sha256, write_json
+from .export import json_default, sha256, write_json
 from .silhouette_presentation import render
+from .video_set import LEGACY_CLIPS, resolve_clips
 
 
 COURT = dict(length_m=28., width_m=15., key_depth_m=5.8, key_width_m=4.9)
-CLIPS = ('attack_clip', 'attack_clip2')
+CLIPS = LEGACY_CLIPS
 
 
 def load_source(source, clip, info):
@@ -118,10 +119,10 @@ def detect_ball(model, image, args, rows=()):
     return detections
 
 
-def fresh_people(model, image, tracker_path, clip, shot, device):
+def fresh_people(model, image, tracker_path, clip, shot, device, imgsz=640, conf=.25, iou=.7):
     result = model.track(image, persist=True, tracker=str(tracker_path.resolve()),
-                         classes=[0], device=device, imgsz=640,
-                         conf=.25, iou=.7, verbose=False, save=False)[0]
+                         classes=[0], device=device, imgsz=imgsz,
+                         conf=conf, iou=iou, verbose=False, save=False)[0]
     rows = []
     if result.boxes.is_track:
         for box, confidence, track_id in zip(result.boxes.xyxy.cpu().tolist(),
@@ -222,8 +223,8 @@ def rerender(args):
                   source_manifest_sha256=sha256(args.source/'experiment.json'), clips={})
     write_json(args.output/'experiment.json', report)
     try:
-        for clip in CLIPS:
-            video = args.videos/(clip+'.mp4')
+        clip_videos = resolve_clips(args.videos, args.clips)
+        for clip, video in clip_videos:
             info = video_info(video)
             frames, provenance = load_source(args.source, clip, info)
             if any('ball' not in frame or 'possession' not in frame for frame in frames):
@@ -248,7 +249,7 @@ def rerender(args):
             '<p>ALL raw ball detections: large orange rings (may include false detections). '
             'Gray X: prediction only. Minimap ring: estimated controller, NOT measured ball floor position.</p>'+
             ''.join(f'<h2>{clip}</h2><video controls preload="metadata" style="width:min(100%,1100px)" '
-                    f'src="{clip}/annotated.mp4"></video>' for clip in CLIPS)+'</body></html>', encoding='utf8')
+                    f'src="{clip}/annotated.mp4"></video>' for clip, _ in clip_videos)+'</body></html>', encoding='utf8')
         snapshots = args.output/'run_source'
         snapshots.mkdir()
         for name in ('ball_cli.py', 'silhouette_presentation.py'):
@@ -275,7 +276,7 @@ def run(args):
     if ultralytics.__version__ != '8.4.158':
         raise RuntimeError('Install the pinned requirements.txt')
     config = BallConfig(detection_confidence=args.conf)
-    videos = {clip: args.videos/(clip+'.mp4') for clip in CLIPS}
+    videos = dict(resolve_clips(args.videos, args.clips))
     infos = {clip: video_info(video) for clip, video in videos.items()}
     for info in infos.values():
         if min(info['width'], info['height'], info['frames']) <= 0 or not np.isfinite(info['fps']) or info['fps'] <= 0:
@@ -300,14 +301,17 @@ def run(args):
     try:
         torch.set_num_threads(args.threads)
         torch.manual_seed(0)
-        model = YOLO(args.model)
-        ball_name = model.names.get(args.ball_class, '').lower().replace('_', ' ')
-        if model.task != 'detect' or ball_name not in ('sports ball', 'basketball', 'ball'):
-            raise ValueError('Selected detector class must be sports ball, basketball or ball')
-        report['model'] = dict(path=str(Path(model.ckpt_path).resolve()), sha256=sha256(model.ckpt_path),
-            class_id=args.ball_class, class_name=model.names[args.ball_class],
-            license='Verify checkpoint/dataset license separately; Ultralytics AGPL-3.0 / enterprise also applies')
-        if args.model_provenance:
+        model = None if getattr(args, 'skip_ball', False) else YOLO(args.model)
+        if model is None:
+            report['model'] = dict(skipped=True, reason='person_court_foundation_only')
+        else:
+            ball_name = model.names.get(args.ball_class, '').lower().replace('_', ' ')
+            if model.task != 'detect' or ball_name not in ('sports ball', 'basketball', 'ball'):
+                raise ValueError('Selected detector class must be sports ball, basketball or ball')
+            report['model'] = dict(path=str(Path(model.ckpt_path).resolve()), sha256=sha256(model.ckpt_path),
+                class_id=args.ball_class, class_name=model.names[args.ball_class],
+                license='Verify checkpoint/dataset license separately; Ultralytics AGPL-3.0 / enterprise also applies')
+        if args.model_provenance and model is not None:
             report['model']['provenance'] = json.loads(args.model_provenance.read_text(encoding='utf8'))
             expected = report['model']['provenance'].get('weights_sha256')
             if expected is not None and expected != report['model']['sha256']:
@@ -336,8 +340,18 @@ def run(args):
                     raise ValueError('Fresh person tracking requires a COCO person detector')
                 report['person_model'] = dict(path=str(Path(people.ckpt_path).resolve()),
                                               sha256=sha256(people.ckpt_path))
-                tracker_config = yaml.safe_load((Path(ultralytics.__file__).parent/'cfg'/'trackers'/'botsort.yaml').read_text(encoding='utf8'))
-                tracker_config.update(with_reid=False, gmc_method='sparseOptFlow')
+                tracker_config = yaml.safe_load((Path(ultralytics.__file__).parent/'cfg'/'trackers'/
+                                                 f'{args.person_tracker}.yaml').read_text(encoding='utf8'))
+                if args.person_tracker == 'tracktrack':
+                    tracker_config.update(
+                        track_high_thresh=args.person_track_high_thresh,
+                        track_low_thresh=args.person_track_low_thresh,
+                        new_track_thresh=args.person_new_track_thresh,
+                        min_track_len=args.person_min_track_len,
+                        track_buffer=args.person_track_buffer)
+                tracker_config.update(with_reid=args.person_reid, gmc_method='sparseOptFlow')
+                if args.person_reid:
+                    tracker_config['model'] = args.reid_model
                 tracker_path = target/'person_tracker.yaml'
                 tracker_path.write_text(yaml.safe_dump(tracker_config))
             tracker = BallTracker((info['width'], info['height']), info['fps'], config)
@@ -366,7 +380,8 @@ def run(args):
                             if index:
                                 for person_tracker in people.predictor.trackers:
                                     person_tracker.reset()
-                        rows = fresh_people(people, image, tracker_path, clip, shot, args.device)
+                        rows = fresh_people(people, image, tracker_path, clip, shot, args.device,
+                                            args.person_imgsz, args.person_conf, args.person_iou)
                         timings['person_inference_s'] += time.perf_counter()-start
                         start = time.perf_counter()
                         matrix, quality = camera_frame(image, rows, detector, flow, index, args.court_interval, cut)
@@ -376,7 +391,7 @@ def run(args):
                             tracks=[project_track(r, matrix, quality, COURT, (info['width'], info['height'])) for r in rows])
                         timings['camera_s'] += time.perf_counter()-start
                     start = time.perf_counter()
-                    raw = detect_ball(model, image, args, frame['tracks'])
+                    raw = [] if model is None else detect_ball(model, image, args, frame['tracks'])
                     timings['ball_detection_s'] += time.perf_counter()-start
                     start = time.perf_counter()
                     ball = tracker.update(index, raw, cut=cut)
@@ -392,7 +407,21 @@ def run(args):
                 cap.release()
             with (target/'frames.jsonl').open('w', encoding='utf8') as stream:
                 for frame in frames:
-                    stream.write(json.dumps(frame, allow_nan=False)+'\n')
+                    stream.write(json.dumps(frame, allow_nan=False, default=json_default)+'\n')
+            write_json(target/'review-data.json', dict(
+                clip=clip, video=info, frames=frames, court_lines=floor_lines(COURT),
+                automatic_only=True, manual_labels_used=False))
+            with (target/'positions.csv').open('w', newline='', encoding='utf8') as stream:
+                columns = ['frame_idx', 'timestamp_s', 'track_id', 'person_id',
+                           'x1', 'y1', 'x2', 'y2', 'court_x_m', 'court_y_m']
+                writer = csv.DictWriter(stream, fieldnames=columns); writer.writeheader()
+                for frame in frames:
+                    for row in frame['tracks']:
+                        box = row['bbox_xyxy']; xy = row.get('court_xy_m') or [None, None]
+                        writer.writerow(dict(frame_idx=frame['frame_idx'], timestamp_s=frame['timestamp_s'],
+                            track_id=row.get('track_id'), person_id=row.get('player_id'),
+                            x1=box[0], y1=box[1], x2=box[2], y2=box[3],
+                            court_x_m=xy[0], court_y_m=xy[1]))
             flat = [flat_ball(clip, f) for f in frames]
             with (target/'ball.csv').open('w', newline='', encoding='utf8') as stream:
                 writer = csv.DictWriter(stream, fieldnames=list(flat[0]))
@@ -405,15 +434,18 @@ def run(args):
                         raise ValueError('Original person/camera observation changed')
             start = time.perf_counter()
             decoded = encode(video, frames, target, info)
+            shutil.copyfile(target/'annotated.mp4', target/'clean.mp4')
             timings['render_encode_s'] = time.perf_counter()-start
             counts = dict(ball_status=dict(Counter(f['ball']['status'] for f in frames)),
                           possession_status=dict(Counter(f['possession']['status'] for f in frames)),
                           minimap_marker_frames=sum(f['possession']['minimap_xy_m'] is not None for f in frames),
                           calibrated_frames=sum(f['image_to_court_h'] is not None for f in frames))
             meta = dict(status='complete', video=info, source=provenance,
-                person_source='existing_automatic_cache' if cached is not None else 'fresh_botsort_no_reid',
-                person_tracker=tracker_config, person_reid=False if cached is None else 'inherited_from_source',
+                person_source='existing_automatic_cache' if cached is not None else f'fresh_{args.person_tracker}',
+                person_tracker=tracker_config, person_reid=args.person_reid if cached is None else 'inherited_from_source',
                 person_gmc='sparseOptFlow' if cached is None else 'inherited_from_source',
+                person_detector_config=(dict(imgsz=args.person_imgsz, conf=args.person_conf,
+                    iou=args.person_iou, classes=[0]) if cached is None else 'inherited_from_source'),
                 counts=counts, timings_s=dict(timings), total_processing_s=time.perf_counter()-tick,
                 annotated_frames_decoded=decoded, accuracy_metrics=None,
                 artifacts_sha256={p.name: sha256(p) for p in target.iterdir() if p.is_file()})
@@ -427,7 +459,7 @@ def run(args):
             '<p>Experimental ball tracking. Orange ring = estimated controller, NOT ball floor XY. '
             'Body proximity is not verified possession. Offline processing; unknowns retained.</p>'+
             ''.join(f'<h2>{clip}</h2><video controls preload="metadata" style="width:min(100%,1100px)" '
-                    f'src="{clip}/annotated.mp4"></video>' for clip in CLIPS)+'</body></html>', encoding='utf8')
+                    f'src="{clip}/annotated.mp4"></video>' for clip in videos)+'</body></html>', encoding='utf8')
         report.update(status='complete', total_processing_s=time.perf_counter()-started)
         write_json(args.output/'experiment.json', report)
     except BaseException as error:
@@ -439,13 +471,28 @@ def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--videos', type=Path, default=Path('data/raw'))
+    parser.add_argument('--clips', nargs='+',
+                        help='Video filename stems to process; defaults to the historical two clips')
     parser.add_argument('--source', type=Path, help='Completed automatic person/court presentation root')
     parser.add_argument('--render-only', action='store_true', help='Re-render cached ball results without inference')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--model', default='yolo26s.pt')
+    parser.add_argument('--skip-ball', action='store_true',
+                        help='Build only automatic person/court foundations; ball remains unknown')
     parser.add_argument('--ball-class', type=int, default=32)
     parser.add_argument('--model-provenance', type=Path, help='Model URL/revision/license record, saved in manifest')
     parser.add_argument('--person-model', default='yolo26s.pt', help='COCO detector for fresh person tracking only')
+    parser.add_argument('--person-tracker', choices=('botsort', 'tracktrack'), default='tracktrack')
+    parser.add_argument('--person-reid', action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument('--reid-model', default='models/yolo26n-cls.pt')
+    parser.add_argument('--person-imgsz', type=int, default=640)
+    parser.add_argument('--person-conf', type=float, default=.25)
+    parser.add_argument('--person-iou', type=float, default=.7)
+    parser.add_argument('--person-track-high-thresh', type=float, default=.6)
+    parser.add_argument('--person-track-low-thresh', type=float, default=.25)
+    parser.add_argument('--person-new-track-thresh', type=float, default=.7)
+    parser.add_argument('--person-min-track-len', type=int, default=3)
+    parser.add_argument('--person-track-buffer', type=int, default=30)
     parser.add_argument('--device', default='cpu')
     parser.add_argument('--threads', type=int, default=4)
     parser.add_argument('--imgsz', type=int, default=1280)
@@ -458,6 +505,14 @@ def main():
     parser.add_argument('--court-models', type=Path, default=Path('models/kalicalib'))
     parser.add_argument('--court-interval', type=int, default=5)
     args = parser.parse_args()
+    if not 0 <= args.person_track_low_thresh <= args.person_track_high_thresh <= 1:
+        parser.error('Person tracker thresholds must satisfy 0 <= low <= high <= 1')
+    if not 0 <= args.person_new_track_thresh <= 1:
+        parser.error('Person new-track threshold must be between 0 and 1')
+    if not 0 <= args.person_conf <= 1 or not 0 <= args.person_iou <= 1:
+        parser.error('Person detector confidence and IoU must be between 0 and 1')
+    if args.person_imgsz <= 0 or args.person_min_track_len < 1 or args.person_track_buffer < 1:
+        parser.error('Person image size and tracker lengths must be positive')
     if args.render_only:
         rerender(args)
     else:

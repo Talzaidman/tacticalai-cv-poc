@@ -13,6 +13,7 @@ import cv2
 from .export import sha256, write_json
 from .floor_context import apply_display_filter
 from .role_team_cli import CLIPS, render_video, verify
+from .video_set import resolve_clips
 
 
 def run(args):
@@ -37,7 +38,8 @@ def run(args):
     write_json(args.output/'experiment.json', report)
     started = time.perf_counter()
     try:
-        for clip in CLIPS:
+        clip_videos = resolve_clips(args.videos, args.clips)
+        for clip, video in clip_videos:
             t = time.perf_counter()
             source = args.source/clip
             meta = json.loads((source/'metadata.json').read_text())
@@ -45,7 +47,6 @@ def run(args):
             original = [json.loads(l) for l in path.read_text().splitlines()]
             frames = copy.deepcopy(original)
             info = meta['video']
-            video = args.videos/(clip+'.mp4')
             if sha256(video) != info['sha256']:
                 raise ValueError('Video source differs')
             # Court template is a cache from the immutable upstream role baseline.
@@ -98,7 +99,15 @@ def run(args):
         for name in ('team_video_cli.py', 'floor_context.py', 'silhouette_presentation.py', 'role_team_cli.py'):
             shutil.copyfile(Path(__file__).with_name(name), snapshots/name)
         shutil.copyfile(args.config, args.output/'configuration.json')
-        (args.output/'index.html').write_text('''<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>וידאו בצבעי קבוצה</title><body style="margin:16px;background:#111;color:white;font:16px Arial"><p>קליפ 1</p><video controls playsinline preload="metadata" style="width:min(100%,1100px)" src="attack_clip/annotated.mp4"></video><p>קליפ 2</p><video controls playsinline preload="metadata" style="width:min(100%,1100px)" src="attack_clip2/annotated.mp4"></video></body></html>''', encoding='utf8')
+        videos_html = ''.join(
+            f'<p>{clip}</p><video controls playsinline preload="metadata" '
+            f'style="width:min(100%,1100px)" src="{clip}/annotated.mp4"></video>'
+            for clip, _ in clip_videos)
+        (args.output/'index.html').write_text(
+            '<!doctype html><html><meta charset="utf-8"><meta name="viewport" '
+            'content="width=device-width,initial-scale=1"><title>Team-color video</title>'
+            '<body style="margin:16px;background:#111;color:white;font:16px Arial">' +
+            videos_html + '</body></html>', encoding='utf8')
         report.update(status='complete', processing_s=time.perf_counter()-started,
             source_sha256={p.name: sha256(p) for p in snapshots.iterdir()})
         write_json(args.output/'experiment.json', report)
@@ -111,6 +120,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--source', type=Path, default=Path('outputs/unlinked-people-v2'))
     p.add_argument('--videos', type=Path, default=Path('data/raw'))
+    p.add_argument('--clips', nargs='+',
+                   help='Video filename stems to process; defaults to the historical two clips')
     p.add_argument('--config', type=Path, default=Path('configs/floor_context.json'))
     p.add_argument('--output', type=Path, required=True)
     run(p.parse_args())

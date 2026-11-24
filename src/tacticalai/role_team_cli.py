@@ -17,9 +17,10 @@ import numpy as np
 from .export import sha256, write_json
 from .role_team import ClipRoles, classify_identities, identity_key, select_samples, torso_color
 from .silhouette_presentation import render
+from .video_set import LEGACY_CLIPS, resolve_clips
 
 
-CLIPS = ('attack_clip', 'attack_clip2')
+CLIPS = LEGACY_CLIPS
 FIELDS = ['clip', 'frame_idx', 'timestamp_s', 'track_id', 'person_id', 'identity_segment_id',
           'identity_status', 'x1', 'y1', 'x2', 'y2', 'det_confidence', 'role', 'role_reason',
           'role_margin', 'role_agreement', 'role_samples', 'team_id', 'team_reason',
@@ -30,11 +31,31 @@ FIELDS = ['clip', 'frame_idx', 'timestamp_s', 'track_id', 'person_id', 'identity
           'role_scores_json', 'team_distances_lab_json', 'classification_evidence_id']
 
 
+def package_versions(names):
+    """Record unavailable optional packages instead of failing before the run manifest exists."""
+    versions = {}
+    for name in names:
+        try:
+            versions[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            versions[name] = None
+    return versions
+
+
 def verify(source, name, metadata):
     path = source / name
     if sha256(path) != metadata['artifacts_sha256'][name]:
         raise ValueError(f'Source changed: {path}')
     return path
+
+
+def clean_video_source(source, metadata, video, expected_video_sha256):
+    """Resolve a cached render or a hash-verified raw-video fallback."""
+    if 'clean.mp4' in metadata.get('artifacts_sha256', {}):
+        return verify(source, 'clean.mp4', metadata), 'verified_source_artifact'
+    if sha256(video) != expected_video_sha256:
+        raise ValueError('Raw video changed while resolving clean-video fallback')
+    return video, 'verified_original_video'
 
 
 def sample_clip(video, frames, config, model, target, info):
@@ -195,8 +216,8 @@ def run(args):
         source=str(args.source.resolve()), source_manifest_sha256=sha256(args.source/'experiment.json'),
         configuration=config, configuration_sha256=sha256(args.config), device=args.device,
         cpu_threads=args.threads, platform=platform.platform(), python=platform.python_version(),
-        versions={p: importlib.metadata.version(p) for p in
-                  ('torch', 'open-clip-torch', 'numpy', 'opencv-python', 'scipy', 'imageio-ffmpeg')},
+        versions=package_versions(
+            ('torch', 'open-clip-torch', 'numpy', 'opencv-python', 'scipy', 'imageio-ffmpeg')),
         detector_tracker_identity_camera_segmentation_rerun=False,
         role_network_executed=True, offline_future_frames_used=True,
         full_pipeline_benchmark_s=None, independent_accuracy_metrics=None, clips={},
@@ -231,7 +252,8 @@ def run(args):
         manifest.update(role_model_sha256=checkpoint_sha256,
                         role_model_setup_s=time.perf_counter()-t)
         all_flat = []
-        for clip in CLIPS:
+        clip_videos = resolve_clips(args.videos, args.clips)
+        for clip, video in clip_videos:
             start = time.perf_counter()
             source = args.source/clip
             source_meta = json.loads((source/'metadata.json').read_text())
@@ -241,7 +263,6 @@ def run(args):
             frames = [json.loads(l) for l in frames_path.read_text().splitlines()]
             review = json.loads(verify(source, 'review-data.json', source_meta).read_text())
             info = review['video']
-            video = args.videos/(clip+'.mp4')
             if sha256(video) != info['sha256'] or len(frames) != info['frames']:
                 raise ValueError('Video or frame count differs from baseline')
             for i, f in enumerate(frames):
@@ -291,7 +312,9 @@ def run(args):
                 writer = csv.DictWriter(stream, fieldnames=FIELDS); writer.writeheader(); writer.writerows(flat)
             people = person_summaries(enriched, decisions, info['fps'])
             write_json(target/'persons.json', people)
-            shutil.copyfile(verify(source, 'clean.mp4', source_meta), target/'clean.mp4')
+            clean_source, clean_source_kind = clean_video_source(
+                source, source_meta, video, info['sha256'])
+            shutil.copyfile(clean_source, target/'clean.mp4')
             decoded = render_video(video, enriched, review['court_lines'], target, info['fps'])
             timings.update(new_clip_processing_s=time.perf_counter()-start, annotated_frames_decoded=decoded)
             counts = dict(observations=len(flat), person_hypotheses=len(people),
@@ -300,32 +323,32 @@ def run(args):
                 team_observations=dict(Counter(r['team_id'] or 'unknown' for r in flat)),
                 projected_observations=sum(r['court_x_m'] is not None for r in flat),
                 counts_are_predictions_not_ground_truth=True)
-            historical = dict(
-                tracking=dict(hardware=source_meta['source_tracking_metadata'].get('gpu'),
-                    timing=source_meta['source_tracking_metadata']['timing'],
-                    scope=source_meta['source_tracking_metadata']['timing_notes'],
-                    tracker_config=source_meta['tracker_config'],
-                    detector_config=source_meta['source_tracking_metadata']['config'],
-                    versions=source_meta['source_tracking_metadata']['versions']),
-                segmentation=dict(inference_s=source_meta['source_automatic_metadata']['silhouettes']['segmentation_inference_s'],
-                                  hardware='CPU', scope='historical segmentation inference only; reused in this run'),
-                other_stages=dict(benchmark_s=None, reason='No unified end-to-end execution in this run'))
-            provenance = source_meta['source_automatic_metadata']['source_automatic_metadata']
+            historical = dict(other_stages=dict(
+                benchmark_s=None, reason='No independently validated end-to-end benchmark'))
+            tracking_meta = source_meta.get('source_tracking_metadata')
+            if tracking_meta:
+                historical['tracking'] = dict(hardware=tracking_meta.get('gpu'),
+                    timing=tracking_meta.get('timing'), scope=tracking_meta.get('timing_notes'),
+                    tracker_config=source_meta.get('tracker_config'),
+                    detector_config=tracking_meta.get('config'), versions=tracking_meta.get('versions'))
+            else:
+                historical['tracking'] = dict(
+                    scope='Fresh automatic source stage', tracker_config=source_meta.get('person_tracker'),
+                    timing=source_meta.get('timings_s'), versions=None)
+            silhouette_meta = source_meta.get('silhouettes') or source_meta.get('source_automatic_metadata', {}).get('silhouettes')
+            if silhouette_meta:
+                historical['segmentation'] = dict(
+                    inference_s=silhouette_meta.get('segmentation_inference_s'),
+                    hardware=args.device, scope='Segmentation inference reused by role/team stage')
+            provenance = source_meta.get('source_automatic_metadata', {}).get('source_automatic_metadata', {})
             for stage in ('identities', 'cameras'):
-                stage_path = Path(provenance[stage])
+                value = provenance.get(stage)
+                if not value:
+                    continue
+                stage_path = Path(value)
                 if stage_path.exists():
-                    stage_meta = json.loads(stage_path.read_text())
-                    if stage == 'identities':
-                        feature = stage_meta.get('source', {})
-                        historical['identity_feature_extraction'] = dict(
-                            metadata_sha256=sha256(stage_path),
-                            seconds=feature.get('seconds'), device=feature.get('device'),
-                            new_crops=feature.get('new_crops'), reused_crops=feature.get('reused_crops'),
-                            scope='Historical temporal appearance extraction, including cache reuse; not complete identity pipeline')
-                    else:
-                        historical['camera_presentation_stage'] = dict(
-                            metadata_sha256=sha256(stage_path), seconds=stage_meta.get('elapsed_s'),
-                            scope='Historical camera/presentation stage elapsed field; includes its recorded scope, not an isolated calibration benchmark')
+                    historical[stage] = dict(metadata_sha256=sha256(stage_path),
+                                             scope='Inherited automatic stage metadata')
             web_frames = []
             for frame in enriched:
                 web_rows = []
@@ -341,7 +364,17 @@ def run(args):
                 persons=people, counts=counts, court_lines=review['court_lines'], team_centers_lab=centers))
             shutil.copyfile(source/'metadata.json', target/'baseline-provenance.json')
             # Verify preserved measurements before declaring success.
-            allowed = {'role', 'team_id', 'jersey_number'}
+            # This stage may change only classification evidence and its presentation
+            # caption. Geometry, tracking, identity, calibration and silhouettes must
+            # remain byte-for-byte equivalent as decoded Python values.
+            allowed = {
+                'role', 'team_id', 'jersey_number', 'role_reason', 'team_reason',
+                'role_scores', 'role_margin', 'role_agreement', 'role_samples',
+                'team_samples', 'team_distances_lab', 'team_margin_lab',
+                'team_agreement', 'torso_lab', 'classification_evidence_id',
+                'classification_source', 'classification_temporal_scope',
+                'display_caption',
+            }
             for original, current in zip(frames, enriched):
                 for before, after in zip(original['tracks'], current['tracks']):
                     if any(after[k] != v for k, v in before.items() if k not in allowed):
@@ -349,6 +382,7 @@ def run(args):
             meta = dict(status='complete', video=info, source_frames_sha256=sha256(frames_path),
                 source_metadata_sha256=sha256(source/'metadata.json'), timings=timings,
                 historical_stages=historical, counts=counts, source_measurements_preserved=True,
+                clean_video_source=clean_source_kind,
                 artifacts_sha256={p.name: sha256(p) for p in target.iterdir() if p.is_file()})
             write_json(target/'metadata.json', meta)
             manifest['clips'][clip] = dict(counts=counts, timings=timings, historical_stages=historical,
@@ -377,6 +411,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--source', type=Path, default=Path('outputs/restored-identity-baseline-v1'))
     p.add_argument('--videos', type=Path, default=Path('data/raw'))
+    p.add_argument('--clips', nargs='+',
+                   help='Video filename stems to process; defaults to the historical two clips')
     p.add_argument('--config', type=Path, default=Path('configs/role_team.json'))
     p.add_argument('--model-cache', type=Path, default=Path('models/role-clip'))
     p.add_argument('--classification-cache', type=Path,

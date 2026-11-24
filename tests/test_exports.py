@@ -2,9 +2,11 @@ import csv
 import io
 import tempfile
 import unittest
+import json
+import numpy as np
 from pathlib import Path
 
-from tacticalai.export import csv_writer, records, sha256, write_rows
+from tacticalai.export import csv_writer, json_default, records, sha256, write_rows
 
 
 class Array:
@@ -49,3 +51,10 @@ class ExportTests(unittest.TestCase):
             path = Path(tmp) / "input"
             path.write_bytes(b"abc")
             self.assertEqual(sha256(path), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+
+
+class JsonEvidenceTests(unittest.TestCase):
+    def test_numpy_arrays_and_scalars_are_json_serializable(self):
+        value = {"matrix": np.asarray([[1., 2.], [3., 4.]]), "count": np.int64(3)}
+        self.assertEqual(json.loads(json.dumps(value, default=json_default)),
+                         {"matrix": [[1.0, 2.0], [3.0, 4.0]], "count": 3})

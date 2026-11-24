@@ -2,13 +2,15 @@
 import copy
 import json
 from pathlib import Path
+import tempfile
 import unittest
 
 import numpy as np
 
 from tacticalai.role_team import (classify_identities, decide_role, decide_team,
                                  fit_teams, select_samples, square_pad, torso_color)
-from tacticalai.role_team_cli import enrich, flat_record, person_summaries
+from tacticalai.export import sha256
+from tacticalai.role_team_cli import clean_video_source, enrich, flat_record, person_summaries
 
 
 CONFIG = json.loads(Path('configs/role_team.json').read_text())
@@ -21,6 +23,18 @@ def samples(role='player', color=None, count=4):
 
 
 class RoleTeamTests(unittest.TestCase):
+    def test_clean_video_uses_verified_raw_fallback_for_cache_only_source(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            video = root/'video.mp4'
+            video.write_bytes(b'raw-video')
+            resolved, kind = clean_video_source(
+                root/'cache', {'artifacts_sha256': {}}, video, sha256(video))
+            self.assertEqual(resolved, video)
+            self.assertEqual(kind, 'verified_original_video')
+            with self.assertRaisesRegex(ValueError, 'Raw video changed'):
+                clean_video_source(root/'cache', {'artifacts_sha256': {}}, video, 'wrong')
+
     def test_full_body_padding_preserves_all_original_pixels(self):
         crop = np.full((70, 20, 3), 240, np.uint8)
         padded = square_pad(crop)

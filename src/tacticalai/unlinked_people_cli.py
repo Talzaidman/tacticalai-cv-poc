@@ -14,6 +14,7 @@ import time
 from .export import sha256, write_json
 from .role_team_cli import CLIPS, FIELDS, flat_record, render_video, verify
 from .unlinked_people import add_unlinked
+from .video_set import resolve_clips
 
 
 EXTRA_FIELDS = ['observation_kind', 'observation_id', 'detector_source', 'detection_index',
@@ -47,7 +48,8 @@ def run(args):
     write_json(args.output/'experiment.json', manifest)
     combined = []
     try:
-        for clip in CLIPS:
+        clip_videos = resolve_clips(args.videos, args.clips)
+        for clip, video in clip_videos:
             start = time.perf_counter()
             source = args.source/clip
             meta = json.loads((source/'metadata.json').read_text())
@@ -56,7 +58,6 @@ def run(args):
             source_frames = verify(source, 'frames.jsonl', meta)
             frames = [json.loads(l) for l in source_frames.read_text().splitlines()]
             info = meta['video']
-            video = args.videos/(clip+'.mp4')
             masks_path = args.masks/clip/'masks.jsonl'
             if sha256(video) != info['sha256'] or info['sha256'] != mask_meta['clips'][clip]['video_sha256']:
                 raise ValueError('Source video differs')
@@ -109,12 +110,15 @@ def run(args):
             writer = csv.DictWriter(stream, fieldnames=FIELDS+EXTRA_FIELDS)
             writer.writeheader(); writer.writerows(combined)
         # Basic native video controls only. Detailed notes belong in the chat.
-        (args.output/'index.html').write_text('''<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>סרטוני זיהוי אנשים</title>
-<body style="margin:16px;background:#111;color:white;font:16px Arial"><p>קליפ 1 — Unlinked = אדם שזוהה ללא שיוך לזהות</p>
-<video controls playsinline preload="metadata" style="width:min(100%,1100px)" src="attack_clip/annotated.mp4"></video>
-<p>קליפ 2</p><video controls playsinline preload="metadata" style="width:min(100%,1100px)" src="attack_clip2/annotated.mp4"></video>
-</body></html>''', encoding='utf8')
+        videos_html = ''.join(
+            f'<p>{clip} — Unlinked = detected person without an assigned identity</p>'
+            f'<video controls playsinline preload="metadata" style="width:min(100%,1100px)" '
+            f'src="{clip}/annotated.mp4"></video>' for clip, _ in clip_videos)
+        (args.output/'index.html').write_text(
+            '<!doctype html><html><meta charset="utf-8"><meta name="viewport" '
+            'content="width=device-width,initial-scale=1"><title>Person observations</title>'
+            '<body style="margin:16px;background:#111;color:white;font:16px Arial">' +
+            videos_html + '</body></html>', encoding='utf8')
         snapshots = args.output/'run_source'; snapshots.mkdir()
         for name in ('unlinked_people.py', 'unlinked_people_cli.py', 'silhouette_presentation.py', 'role_team_cli.py', 'court_gate.py'):
             shutil.copyfile(Path(__file__).with_name(name), snapshots/name)
@@ -133,6 +137,8 @@ def main():
     p.add_argument('--source', type=Path, default=Path('outputs/roles-teams-final-v1'))
     p.add_argument('--masks', type=Path, default=Path('outputs/person-coverage-investigation/masks-all'))
     p.add_argument('--videos', type=Path, default=Path('data/raw'))
+    p.add_argument('--clips', nargs='+',
+                   help='Video filename stems to process; defaults to the historical two clips')
     p.add_argument('--config', type=Path, default=Path('configs/unlinked_people.json'))
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--color-mode', choices=['team', 'identity'], default='team')

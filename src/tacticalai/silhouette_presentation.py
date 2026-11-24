@@ -14,7 +14,9 @@ from scipy.optimize import linear_sum_assignment
 
 from .export import sha256, write_json
 from .identity_presentation import person_color, text
-from .challenge_presentation import CLIPS
+from .video_set import LEGACY_CLIPS, resolve_clips
+
+CLIPS = LEGACY_CLIPS
 
 
 def associate_masks(rows, boxes, polygons, confidences, minimum_iou=.3):
@@ -157,7 +159,7 @@ def render(image, frame, lines, color_mode='identity'):
     return out
 
 
-def run(source, output, model_path, device='cpu', imgsz=640):
+def run(source, output, model_path, device='cpu', imgsz=640, videos=Path('data/raw'), clips=None):
     from ultralytics import YOLO
     import torch
     import imageio_ffmpeg
@@ -178,17 +180,17 @@ def run(source, output, model_path, device='cpu', imgsz=640):
                     device=device, imgsz=imgsz, conf=.2, iou=.7, classes=[0],
                     retina_masks=True, association='one-to-one maximum box IoU',
                     minimum_association_iou=.3, alpha=.4, missing_mask_policy='null; label only',
-                    role_source='existing manual review', tracking_identity_projection_rerun=False,
+                    role_source='existing automatic source; roles may remain unknown',
+                    tracking_identity_projection_rerun=False,
                     accuracy_metrics=None, versions={p: importlib.metadata.version(p) for p in
                         ('ultralytics', 'torch', 'opencv-python', 'numpy', 'scipy')})
     manifest['silhouettes'] = settings
     write_json(output/'experiment.json', manifest)
     started = time.perf_counter()
     try:
-        for clip in CLIPS:
+        for clip, video in resolve_clips(videos, clips):
             target = output/clip
             data = json.loads((source/clip/'review-data.json').read_text())
-            video = Path('data/raw')/(clip+'.mp4')
             if sha256(video) != data['video']['sha256']:
                 raise ValueError('Source video hash mismatch')
             cap = cv2.VideoCapture(str(video))
@@ -211,8 +213,13 @@ def run(source, output, model_path, device='cpu', imgsz=640):
                     polygons = result.masks.xy if result.masks is not None else []
                     associate_masks(frame['tracks'], result.boxes.xyxy.cpu().numpy() if polygons else [],
                                     polygons, result.boxes.conf.cpu().numpy())
+                    allowed_mask_fields = {'silhouette_xy', 'silhouette_confidence',
+                                           'silhouette_box_iou'}
                     for before, after in zip(original, frame['tracks']):
-                        assert all(after[k] == v for k, v in before.items())
+                        changed = [k for k, v in before.items()
+                                   if k not in allowed_mask_fields and after[k] != v]
+                        if changed:
+                            raise ValueError(f'Segmentation changed source fields: {changed}')
                     matched += sum(r['silhouette_xy'] is not None for r in frame['tracks'])
                     total += len(frame['tracks'])
                     rendered = render(image, frame, data['court_lines'])
@@ -274,6 +281,11 @@ def main():
     parser.add_argument('--model', type=Path, default=Path('models/yolo26s-seg.pt'))
     parser.add_argument('--device', default='cpu')
     parser.add_argument('--imgsz', type=int, default=640)
+    parser.add_argument('--videos', type=Path, default=Path('data/raw'))
+    parser.add_argument('--clips', nargs='+',
+                        help='Video filename stems to process; defaults to the historical two clips')
+    parser.add_argument('--cache-only', action='store_true',
+                        help='Create the segmentation-enriched automatic cache without the legacy presentation')
     args = parser.parse_args()
     # The intermediate cache preserves historical source provenance, but the
     # delivered presentation is rebuilt from automatic identities and cameras.
@@ -281,7 +293,12 @@ def main():
     cache = args.output.with_name(args.output.name + '-mask-cache')
     if args.output.exists():
         parser.error('Use a fresh output directory')
-    run(args.source, cache, args.model, args.device, args.imgsz)
+    run(args.source, cache, args.model, args.device, args.imgsz, args.videos, args.clips)
+    if args.cache_only:
+        if args.output.exists():
+            parser.error('Output unexpectedly exists')
+        cache.replace(args.output)
+        return
     from .automatic_presentation import run as render_automatic
     render_automatic(cache, Path('outputs/temporal-reid-final'),
                      Path('outputs/challenge-player-smoothed-v1'), args.output)

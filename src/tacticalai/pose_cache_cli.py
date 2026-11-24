@@ -13,9 +13,10 @@ from scipy.optimize import linear_sum_assignment
 from .ball import iou
 from .ball_cli import load_source
 from .ball_control import contact_geometry
-from .ball_fusion_cli import eligible_people,load_ball
+from .ball_fusion_cli import DEFAULT_BALL_PREFIX,ball_result_paths,eligible_people,load_ball
 from .calibration_cli import video_info
 from .export import sha256,write_json
+from .video_set import resolve_clips
 
 
 def match_poses(rows,boxes,keypoints,minimum_iou=.35):
@@ -37,18 +38,18 @@ def run(args):
     model=YOLO(str(args.model))
     if model.task!='pose':raise ValueError('Expected a pose model')
     args.output.mkdir(parents=True,exist_ok=False)
-    report=dict(status='running',device='cpu',model=dict(path=str(args.model.resolve()),sha256=sha256(args.model)),
+    report=dict(status='running',device=args.device,model=dict(path=str(args.model.resolve()),sha256=sha256(args.model)),
                 imgsz=args.imgsz,threads=args.threads,minimum_pose_box_iou=.35,
                 roi_policy='union of automatically classified players within .65 body heights of the ball silhouette distance',
                 keypoint_order='COCO 17: left/right wrist indices 9/10; confidence is model visibility score',
                 versions={p:importlib.metadata.version(p) for p in ('torch','ultralytics','numpy','opencv-python','scipy')},clips={})
     write_json(args.output/'experiment.json',report)
     started=time.perf_counter()
-    for clip in args.clips:
-        tick=time.perf_counter();video=args.videos/(clip+'.mp4');info=video_info(video)
+    for clip,video in resolve_clips(args.videos,args.clips):
+        tick=time.perf_counter();info=video_info(video)
         people,source=load_source(args.people_results,clip,info)
-        balls=load_ball(args.ball_results/f'RF-DETR-tiles-Kalman_{clip}.json',
-                        args.ball_results/f'RF-DETR-tiles-Kalman_{clip}.mp4',info)
+        ball_path,ball_video=ball_result_paths(args.ball_results,args.ball_prefix,clip)
+        balls=load_ball(ball_path,ball_video,info)
         target=args.output/clip;target.mkdir()
         cap=cv2.VideoCapture(str(video));frames=[];inference_s=0.;roi_count=0
         try:
@@ -67,7 +68,7 @@ def run(args):
                     x2,y2=np.minimum([info['width'],info['height']],np.ceil(boxes[:,2:].max(axis=0)+pad)).astype(int)
                     roi=[int(x1),int(y1),int(x2),int(y2)]
                     t=time.perf_counter()
-                    result=model.predict(image[y1:y2,x1:x2],device='cpu',imgsz=args.imgsz,
+                    result=model.predict(image[y1:y2,x1:x2],device=args.device,imgsz=args.imgsz,
                                          conf=.2,iou=.7,verbose=False,save=False)[0]
                     inference_s+=time.perf_counter()-t;roi_count+=1
                     if result.keypoints is not None and result.boxes is not None:
@@ -81,7 +82,7 @@ def run(args):
         with (target/'poses.jsonl').open('w') as stream:
             for frame in frames:stream.write(json.dumps(frame,allow_nan=False)+'\n')
         metadata=dict(status='complete',video=info,source_people=source,
-                      ball_json_sha256=sha256(args.ball_results/f'RF-DETR-tiles-Kalman_{clip}.json'),
+                      ball_json_sha256=sha256(ball_path),ball_prefix=args.ball_prefix,
                       frames=len(frames),roi_frames=roi_count,matched_people=sum(len(f['poses']) for f in frames),
                       inference_s=inference_s,processing_s=time.perf_counter()-tick,
                       poses_sha256=sha256(target/'poses.jsonl'))
@@ -96,11 +97,14 @@ def main():
     parser.add_argument('--model',type=Path,default=Path('models/yolo26n-pose.pt'))
     parser.add_argument('--people-results',type=Path,required=True)
     parser.add_argument('--ball-results',type=Path,required=True)
+    parser.add_argument('--ball-prefix',default=DEFAULT_BALL_PREFIX)
     parser.add_argument('--videos',type=Path,default=Path('data/raw'))
     parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--clips',nargs='+',default=['attack_clip','attack_clip2'])
+    parser.add_argument('--clips',nargs='+',
+                        help='Video filename stems to process; defaults to the historical two clips')
     parser.add_argument('--imgsz',type=int,default=640)
     parser.add_argument('--threads',type=int,default=4)
+    parser.add_argument('--device',default='cpu')
     run(parser.parse_args())
 
 

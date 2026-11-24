@@ -6,7 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from tacticalai.ball_fusion_cli import combine_frames, controller_ball, eligible_people, load_ball
+from tacticalai.ball_fusion_cli import (ball_result_paths,combine_frames,controller_ball,
+                                        eligible_people,load_ball,player_camera_data_preserved)
 
 
 def player(key='p', role='player', shown=True):
@@ -43,6 +44,23 @@ class FusionTests(unittest.TestCase):
         self.assertEqual((people,balls),before)
         self.assertTrue(all(all(frame[k]==v for k,v in original.items())
                             for frame,original in zip(result,people)))
+
+    def test_foundation_ball_placeholders_may_be_replaced_without_weakening_player_integrity(self):
+        people,balls=inputs(['detected']*4)
+        for frame in people:
+            frame.update(
+                ball=dict(status='unknown',reason='no_candidates'),
+                possession=dict(status='unknown',reason='ball_not_observed'),
+                ball_raw_detections=[],ball_camera_cut_reset=True,
+                image_to_court_h=[[1,0,0],[0,1,0],[0,0,1]])
+        before=copy.deepcopy(people)
+        result=combine_frames(people,balls,25)
+        self.assertEqual(result[-1]['possession']['status'],'estimated_control')
+        self.assertTrue(all(player_camera_data_preserved(source,fused)
+                            for source,fused in zip(people,result)))
+        self.assertEqual(people,before)
+        broken=copy.deepcopy(result[0]);broken['tracks'][0]['bbox_xyxy'][0]+=1
+        self.assertFalse(player_camera_data_preserved(people[0],broken))
 
     def test_inference_never_establishes_or_retains_control(self):
         for state in ('predicted','interpolated','none'):
@@ -96,6 +114,18 @@ class FusionTests(unittest.TestCase):
             path.write_text(json.dumps(data))
             with patch('tacticalai.ball_fusion_cli.video_info',return_value=dict(info,width=1280)):
                 with self.assertRaises(ValueError):load_ball(path,Path('video.mp4'),info)
+
+    def test_sam3_native_bundle_and_configurable_prefix_are_supported(self):
+        info=dict(width=640,height=360,frames=1,fps=25,sha256='local')
+        data=dict(config=dict(tracker='sam3_native_video_track'),tracked=[ball(0)],
+                  detections=[[dict(x=120,y=150,conf=.8)]])
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)
+            path,video=ball_result_paths(folder,'SAM3-Native','clip')
+            self.assertEqual(path.name,'SAM3-Native_clip.json')
+            path.write_text(json.dumps(data))
+            with patch('tacticalai.ball_fusion_cli.video_info',return_value=info):
+                self.assertEqual(load_ball(path,video,info),data)
 
 
 if __name__=='__main__':unittest.main()

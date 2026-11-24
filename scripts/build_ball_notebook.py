@@ -13,9 +13,9 @@ def cell(kind, source):
 
 cells = [
     cell("markdown", r"""
-# Ball detection: filtered RF-DETR + Kalman on both clips
-Standalone notebook: reads `MyDrive/TacticalAI/data/raw/attack_clip.mp4` and
-`attack_clip2.mp4`, runs the selected variants, tracks the ball, and **plays every result inline**.
+# Ball detection: basketball RF-DETR + Kalman on video 80
+Standalone notebook: reads `MyDrive/TacticalAI/data/raw/80.mp4`, runs the selected
+basketball-specific detector, tracks the ball, and **plays every result inline**.
 
 | # | Model | What it is | Needs |
 |---|---|---|---|
@@ -33,11 +33,11 @@ that value is kept only in the current runtime session.
 RF-DETR uses local Colab inference; model authorization/download requires the key.
 Re-run from setup so the new variant definitions and output directory are used.
 
-**Current experiment:** `RF-DETR-tiles` baseline versus **Kalman + motion gates + short-gap interpolation**
-on **both clips**, using saved detections from each clip. Only Kalman-filtered videos
-are displayed by default; baseline metrics/videos are still saved.
-This is the second individual video from the previous sweep, selected from visual
-feedback, not established as the most accurate model. Settings are unchanged:
+**Current experiment:** **SAM 3 video** with the text prompt `"basketball"`, compared
+against the saved RF-DETR + Kalman result on **`80.mp4`**. SAM 3 is displayed and saved;
+the cached RF-DETR baseline is not rerun.
+This configuration was selected from earlier basketball-video experiments, but it is
+not established as the most accurate model for this new footage. Settings are unchanged:
 checkpoint `/13`, full frame + four overlapping 60% crops, detector cutoff 0.10,
 legacy tracker cutoff 0.25, six-frame gap, and 0.6 reinitialization confidence.
 The Kalman comparison requires three coherent frames to start, rejects out-of-gate
@@ -45,11 +45,10 @@ measurements regardless of confidence, predicts for at most 0.20 s, and interpol
 only gaps up to 0.16 s between accepted measurements in the same segment.
 Its gates use image pixels, not physical court speed. They can reject real shots,
 bounces, or camera motion; missing detections and incorrect initial locks remain possible.
-`RF_REUSE_DIRS` points to each saved run; missing caches trigger inference only for
-the missing clip. Set it to `{}` for fresh inference on both clips.
+`RF_REUSE_DIRS` can point to a saved run; an empty mapping triggers fresh inference.
 Cached detection time is historical, not time spent in this CPU postprocessing run.
-WASB, SAM 3, and the other RF-DETR variants are skipped. No manual correction or
-checkpoint location enters inference. A new output folder preserves previous runs.
+WASB and the other RF-DETR variants are skipped. No manual correction or checkpoint
+location enters inference. A new output folder preserves previous runs.
 To restore the clip-1 sweep, set `RF_CLIP_NAMES = ('attack_clip',)`,
 `RF_SELECTED_VARIANTS = None`, and `RF_SWEEP = True`.
 
@@ -93,12 +92,14 @@ ROOT = Path('/content/drive/MyDrive/TacticalAI')
 EXPERIMENT = 'rfdet'  # 'rfdet': RF-DETR (optional WASB reference); 'lowres': WASB tweaks; 'original': both clips
 RF_MODEL_ID = 'basketball-player-detection-3-ycjdo/13'
 RF_SWEEP = False  # Used when RF_SELECTED_VARIANTS is None.
-RF_SELECTED_VARIANTS = ('RF-DETR-tiles',)  # Second individual video from the prior sweep.
-RF_CLIP_NAMES = ('attack_clip', 'attack_clip2')
-RF_REUSE_DIRS = {  # Set to {} to force fresh inference on both clips.
-    'attack_clip': ROOT / 'outputs' / 'ball-notebook-20261026-205848',
-    'attack_clip2': ROOT / 'outputs' / 'ball-notebook-20261026-210537',
-}
+RF_SELECTED_VARIANTS = ('RF-DETR-tiles',)  # Basketball-specific tiled detector selected for clip 80.
+RF_CLIP_NAMES = ('80',)
+RF_REUSE_DIRS = {
+    '80': ROOT / 'outputs' / 'ball-notebook-20261124-131936',
+}  # Reuse the completed RF-DETR detections while evaluating SAM 3.
+SAM3_REUSE_DIRS = {
+    '80': ROOT / 'outputs' / 'ball-notebook-20261124-133057',
+}  # Reuse native SAM 3 candidates; only the automatic track selection changes.
 SHOW_RAW_CANDIDATES = False  # Rejected/raw candidates remain in JSON evidence.
 SHOW_BASELINE = False  # Compute baseline metrics, display only Kalman videos.
 COMPARE_KALMAN = True
@@ -122,6 +123,11 @@ RF_CACHE_SOURCES = {clip: RF_REUSE_DIRS[clip] / f'rf_raw_{clip}.json'
                     and (RF_REUSE_DIRS[clip] / f'rf_raw_{clip}.json').is_file()}
 RF_MISSING_CLIPS = {clip: path for clip, path in CLIPS.items() if clip not in RF_CACHE_SOURCES}
 RF_CACHE_AVAILABLE = not RF_MISSING_CLIPS
+SAM3_CACHE_SOURCES = {clip: SAM3_REUSE_DIRS[clip] / f'SAM3_{clip}.json'
+                      for clip in CLIPS if clip in SAM3_REUSE_DIRS
+                      and (SAM3_REUSE_DIRS[clip] / f'SAM3_{clip}.json').is_file()}
+SAM3_MISSING_CLIPS = {clip: path for clip, path in CLIPS.items() if clip not in SAM3_CACHE_SOURCES}
+SAM3_CACHE_AVAILABLE = not SAM3_MISSING_CLIPS
 assert RF_CACHE_AVAILABLE or torch.cuda.is_available(), 'Select a GPU runtime for fresh inference'
 print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else None, '| torch', torch.__version__)
 print('Output folder:', OUT)
@@ -134,7 +140,7 @@ def secret(name):
 
 ROBOFLOW_API_KEY, HF_TOKEN = secret('ROBOFLOW_API_KEY'), secret('HF_TOKEN')
 print('ROBOFLOW_API_KEY:', 'found' if ROBOFLOW_API_KEY else 'not loaded (not needed for cached postprocessing)')
-print('HF_TOKEN:', 'found' if HF_TOKEN else 'not loaded (only needed if SAM 3 is enabled)')
+print('HF_TOKEN:', 'found' if HF_TOKEN else 'not loaded (not needed for cached SAM 3 postprocessing)')
 if EXPERIMENT == 'rfdet' and not ROBOFLOW_API_KEY and not RF_CACHE_AVAILABLE:
     from getpass import getpass
     ROBOFLOW_API_KEY = getpass('Private Roboflow API key (hidden, session only): ').strip()
@@ -144,7 +150,7 @@ if EXPERIMENT == 'rfdet' and not ROBOFLOW_API_KEY and not RF_CACHE_AVAILABLE:
 # Minimum confidence for the tracker; WASB variant values are set in its experiment cell.
 MIN_CONF = {'WASB': 0.5, 'RF-DETR': 0.25, 'SAM3': 0.3}
 RUN_WASB = False  # Already checked; skip downloads, setup and inference.
-RUN_OPTIONAL_MODELS = False  # Focus this run on RF-DETR; SAM 3 access was pending.
+RUN_OPTIONAL_MODELS = True  # SAM 3 access is approved; compare it on clip 80.
 RUN_CONFIGS = {}
 versions = {}
 for package in ('torch', 'numpy', 'opencv-python', 'omegaconf', 'transformers', 'gdown'):
@@ -160,9 +166,10 @@ for package in ('torch', 'numpy', 'opencv-python', 'omegaconf', 'transformers', 
     rf_selected_variants=RF_SELECTED_VARIANTS, compare_kalman=COMPARE_KALMAN,
     kalman_settings=KALMAN_SETTINGS,
     rf_cache_sources={clip: str(path) for clip, path in RF_CACHE_SOURCES.items()},
+    sam3_cache_sources={clip: str(path) for clip, path in SAM3_CACHE_SOURCES.items()},
     show_raw_candidates=SHOW_RAW_CANDIDATES, show_baseline=SHOW_BASELINE,
     assumptions=['one ball', 'constant-velocity association'],
-    evaluation='19 draft development checkpoints; not held-out accuracy'), indent=2))
+    evaluation='no annotated ball ground truth for clip 80; visual development review only'), indent=2))
 """),
     cell("code", r"""
 # Shared helpers: video IO, ball trackers, drawing, scoring.
@@ -275,19 +282,22 @@ def draw(img, dets, tracked, index, label, scale=1.0):
                 0.4 * u, (255, 255, 255), u, cv2.LINE_AA)
     return img
 
-# Draft check points: ball centers marked by eye on 19 frames (1280x720 coordinates).
-# Not certified ground truth; ambiguous frames were left out.
+# Historical draft checkpoints for the two earlier clips (1280x720 coordinates).
+# Clip 80 intentionally has none; these are not certified ground truth.
 REFERENCE = {
     'attack_clip': {0: (184, 384), 30: (166, 410), 40: (130, 426), 50: (174, 312), 80: (330, 358),
                     90: (348, 358), 100: (364, 218), 120: (685, 95)},
     'attack_clip2': {0: (251, 476), 24: (337, 474), 36: (440, 495), 48: (483, 471), 60: (542, 483),
                      96: (783, 572), 108: (744, 460), 120: (650, 392), 144: (695, 407), 156: (730, 337),
                      168: (765, 229)},
+    # No hand-labelled reference points exist for the new clip. Keep evaluation
+    # explicitly empty rather than reusing coordinates from unrelated footage.
+    '80': {},
 }
 MATCH_RADIUS = 14  # pixels in 1280x720 space
 (OUT / 'evaluation_draft.json').write_text(json.dumps(dict(
     reference=REFERENCE, coordinate_size=[1280, 720], match_radius=MATCH_RADIUS,
-    status='draft development checkpoints, not held-out ground truth'), indent=2))
+    status='historical draft checkpoints only; clip 80 has no reference points'), indent=2))
 
 def score(clip, dets, tracked, width, height):
     sx, sy = 1280 / width, 720 / height
@@ -337,7 +347,7 @@ def run_model(label, detect, tracking=None):
             (OUT / f'{label}_{clip}.json').write_text(json.dumps(dict(stats=stats, detections=dets,
                 tracked=tracked, config=RUN_CONFIGS.get(label, {}))))
             print(label, clip, stats)
-            if SHOW_BASELINE or not COMPARE_KALMAN or label.endswith('-Kalman'):
+            if SHOW_BASELINE or not COMPARE_KALMAN or label.endswith('-Kalman') or label == 'SAM3':
                 show(video)
         except Exception as error:
             RESULTS[label][clip] = dict(error=f'{type(error).__name__}: {error}')
@@ -463,7 +473,7 @@ del wasb; torch.cuda.empty_cache()
     cell("markdown", r"""
 ## 2. RF-DETR basketball (Roboflow)
 Runs in its own small Python environment (avoids package clashes with this notebook).
-Weights download with your key; inference runs locally in Colab. The default run selects **RF-DETR-tiles on both clips**, with the Kalman overlay. The available variants are:
+Weights download with your key; inference runs locally in Colab. The default run selects **RF-DETR-tiles on `80.mp4`**, with the Kalman overlay. The available variants are:
 
 | Variant | Views | Candidate cutoff | Tracker cutoff |
 |---|---|---|---|
@@ -576,29 +586,75 @@ using memory (it reads the whole clip first, so this is offline processing).
 """),
     cell("code", r"""
 SAM3_PROMPT = 'basketball'
+sam3_cache_available = globals().get('SAM3_CACHE_AVAILABLE', False)
+sam3_missing_clips = globals().get('SAM3_MISSING_CLIPS', dict(CLIPS))
+sam3_cache_sources = globals().get('SAM3_CACHE_SOURCES', {})
 
-if RUN_OPTIONAL_MODELS and not HF_TOKEN:
+if RUN_OPTIONAL_MODELS and not HF_TOKEN and not sam3_cache_available:
     from getpass import getpass
     HF_TOKEN = getpass('Hugging Face read token (hidden, session only; Enter to skip): ').strip()
 
-if RUN_OPTIONAL_MODELS and HF_TOKEN:
+if RUN_OPTIONAL_MODELS and (HF_TOKEN or sam3_cache_available):
     try:
         import inspect
-        from transformers import Sam3VideoModel, Sam3VideoProcessor
         dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float32
-        sam3 = Sam3VideoModel.from_pretrained('facebook/sam3', token=HF_TOKEN).to('cuda', dtype=dtype).eval()
-        sam3_processor = Sam3VideoProcessor.from_pretrained('facebook/sam3', token=HF_TOKEN)
+        if sam3_missing_clips:
+            from transformers import Sam3VideoModel, Sam3VideoProcessor
+            sam3 = Sam3VideoModel.from_pretrained('facebook/sam3', token=HF_TOKEN).to('cuda', dtype=dtype).eval()
+            sam3_processor = Sam3VideoProcessor.from_pretrained('facebook/sam3', token=HF_TOKEN)
 
         def to_numpy(value):
             return value.detach().float().cpu().numpy() if hasattr(value, 'detach') else np.asarray(value, float)
 
+        def select_dynamic_sam3_track(found, width, height):
+            # Keep one small, genuinely moving native SAM track; reject static TV graphics.
+            diagonal = math.hypot(width, height)
+            histories = {}
+            for frame_idx, detections in enumerate(found):
+                for detection in detections:
+                    histories.setdefault(detection['sam3_id'], []).append((frame_idx, detection))
+            candidates = []
+            diagnostics = {}
+            minimum_observations = max(3, round(0.05 * len(found)))
+            for object_id, samples in histories.items():
+                radii = [d['r'] for _, d in samples]
+                speeds = []
+                for (left_frame, left), (right_frame, right) in zip(samples, samples[1:]):
+                    elapsed = max(1, right_frame - left_frame)
+                    speeds.append(math.hypot(right['x'] - left['x'], right['y'] - left['y']) / elapsed)
+                median_radius = float(np.median(radii))
+                mean_speed = float(np.mean(speeds)) if speeds else 0.0
+                eligible = (len(samples) >= minimum_observations
+                            and median_radius <= 0.04 * diagonal
+                            and mean_speed >= 0.0015 * diagonal)
+                diagnostics[int(object_id)] = dict(observations=len(samples),
+                    median_radius_px=round(median_radius, 2), mean_speed_px_frame=round(mean_speed, 2),
+                    eligible=eligible)
+                if eligible:
+                    coverage = len(samples) / max(1, len(found))
+                    candidates.append((mean_speed * math.sqrt(coverage) / max(1.0, median_radius), object_id))
+            selected_id = max(candidates)[1] if candidates else None
+            print('SAM 3 native-track diagnostics:', diagnostics, '| selected:', selected_id)
+            RUN_CONFIGS['SAM3'] = {**RUN_CONFIGS.get('SAM3', {}), 'prompt': SAM3_PROMPT,
+                'native_track_diagnostics': diagnostics, 'selected_native_track_id': selected_id,
+                'selection': 'small moving native track; static broadcast graphics rejected'}
+            if selected_id is None:
+                return [[] for _ in found]
+            return [[d for d in detections if d['sam3_id'] == selected_id] for detections in found]
+
         def sam3_detect(clip, frames):
+            if clip in sam3_cache_sources:
+                cached = json.loads(sam3_cache_sources[clip].read_text())
+                found = cached['detections']
+                seconds = cached.get('stats', {}).get('detector_seconds', 0.0)
+                RUN_CONFIGS['SAM3'] = dict(reused_detections=str(sam3_cache_sources[clip]))
+                return select_dynamic_sam3_track(found, frames[0].shape[1], frames[0].shape[0]), seconds
             options = dict(video=np.stack([cv2.cvtColor(f, cv2.COLOR_BGR2RGB) for f in frames]),
                            inference_device='cuda', processing_device='cpu', video_storage_device='cpu')
             if 'dtype' in inspect.signature(sam3_processor.init_video_session).parameters:
                 options['dtype'] = dtype
             session = sam3_processor.init_video_session(**options)
-            sam3_processor.add_text_prompt(inference_session=session, text=SAM3_PROMPT)
+            session = sam3_processor.add_text_prompt(inference_session=session, text=SAM3_PROMPT)
             found = [[] for _ in frames]
             torch.cuda.synchronize(); t0 = time.time()
             with torch.inference_mode():
@@ -611,12 +667,15 @@ if RUN_OPTIONAL_MODELS and HF_TOKEN:
                                                             r=float(max(x1 - x0, y1 - y0) / 2),
                                                             conf=float(conf), sam3_id=int(oid)))
             torch.cuda.synchronize()
-            return found, time.time() - t0
+            seconds = time.time() - t0
+            return select_dynamic_sam3_track(found, frames[0].shape[1], frames[0].shape[0]), seconds
 
         run_model('SAM3', sam3_detect)
-        del sam3; torch.cuda.empty_cache()
+        if 'sam3' in globals():
+            del sam3
+        torch.cuda.empty_cache()
     except Exception as error:
-        message = str(error).replace(HF_TOKEN, '[REDACTED]')
+        message = str(error).replace(HF_TOKEN, '[REDACTED]') if HF_TOKEN else str(error)
         for clip in CLIPS:
             RESULTS.setdefault('SAM3', {}).setdefault(clip, dict(error=message))
         (OUT / 'sam3_setup_error.json').write_text(json.dumps(dict(error=message)))
@@ -626,7 +685,7 @@ if RUN_OPTIONAL_MODELS and HF_TOKEN:
             del sam3
         torch.cuda.empty_cache()
 else:
-    print('SAM3 skipped (optional models disabled or token missing).')
+    print('SAM3 skipped (optional models disabled, or token/cache missing).')
 """),
     cell("markdown", r"""
 ## Side-by-side comparison and summary
@@ -641,7 +700,7 @@ for clip, path in CLIPS.items():
     frames, fps = read_video(path)
     scale = 640 / frames[0].shape[1]
     labels = [label for label in RESULTS if 'tracked' in RESULTS[label].get(clip, {})
-              and (SHOW_BASELINE or not COMPARE_KALMAN or label.endswith('-Kalman'))]
+              and (SHOW_BASELINE or not COMPARE_KALMAN or label.endswith('-Kalman') or label == 'SAM3')]
     for page, start in enumerate(range(0, len(labels), 3), 1):
         selected = labels[start:start+3]
         def comparison_frames():
@@ -666,11 +725,11 @@ summary = pd.DataFrame(rows)
 summary.to_csv(OUT / 'summary.csv', index=False)
 display(summary)
 display(Markdown('''
-- **raw_found**: of the hand-marked check frames (8 in clip 1, 11 in clip 2), how many had *some* detection on the ball.
-- **tracked_correct / tracked_wrong_place**: the tracked ball was on the real ball / somewhere else.
-- **check_off_target_candidates**: candidates outside the draft reference radius on checked frames (duplicates on-target are not penalized). Not a complete precision metric.
+- Clip `80` has no hand-marked ball reference points yet, so the draft-reference score fields are zero and **must not be interpreted as accuracy**.
+- **tracked_correct / tracked_wrong_place** are only meaningful for clips with reference points.
+- **check_off_target_candidates** is only meaningful on referenced frames and is not a complete precision metric.
 - Interpolated/predicted positions are inferred, excluded from observed-hit counts. Tracker time is separate from detector time, which is historical when cached.
-- The 19 draft checkpoints are development feedback, not held-out ground truth. Coverage and smooth overlays are not accuracy; evaluate separately before selecting a winner.
+- Coverage and smooth overlays are not accuracy; evaluate separately before selecting a winner.
 '''))
 print('Everything saved in', OUT)
 """),
