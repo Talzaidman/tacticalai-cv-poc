@@ -125,9 +125,10 @@ def render(image, frame, lines, color_mode='identity'):
         cv2.polylines(panel, [np.rint(np.asarray(line)*scale+origin).astype(np.int32)],
                       False, (170, 185, 180), 1, cv2.LINE_AA)
     for row in rows:
-        if row['court_xy_m'] is None or row['court_region'] != 'inside':
+        map_xy = row.get('minimap_xy_m', row.get('court_xy_m'))
+        if map_xy is None or row['court_region'] != 'inside':
             continue
-        x, y = np.rint(np.asarray(row['court_xy_m'])*scale+origin).astype(int)
+        x, y = np.rint(np.asarray(map_xy)*scale+origin).astype(int)
         color = observation_color(row, color_mode)
         cv2.circle(panel, (x, y), 3, color, -1, cv2.LINE_AA)
         text(panel, row['display_label'], (max(0, min(x+4, 260)), max(20, y-4)), .3, color)

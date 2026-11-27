@@ -23,11 +23,14 @@ from .ball import BallConfig, PossessionEstimator
 from .ball_control import ControlConfig, TemporalControlEstimator
 from .control_smoothing import ControlSmoothingConfig, smooth_control_gaps
 from .ball_cli import load_source
+from .calibration import transform
 from .calibration_cli import video_info
 from .court import floor_lines
 from .export import sha256, write_json
 from .identity_presentation import text
+from .pass_events import PassConfig, infer_pass_events
 from .silhouette_presentation import render
+from .temporal_projection import kalman_rts
 from .video_set import LEGACY_CLIPS, resolve_clips
 
 CLIPS = LEGACY_CLIPS
@@ -183,6 +186,98 @@ def add_ball_trails(frames,info,seconds=.8):
         previous_segment,previous_shot=segment,shot
 
 
+def add_ball_floor_ray_projections(frames):
+    """Map measured image points to the floor plane, never claim true 3D ball XY.
+
+    A homography gives the intersection of the camera ray with the court plane.
+    That coincides with ball position only when the ball is on the floor. Predicted
+    and interpolated tracker states are intentionally not projected.
+    """
+    projected = 0
+    for frame in frames:
+        ball = frame['ball_temporal']
+        frame.update(ball_minimap_floor_ray_xy_m=None, ball_true_court_xy_m=None,
+                     ball_minimap_projection_source='unavailable')
+        quality = dict(method='measured_image_point_to_floor_plane_homography',
+                       true_ball_3d_position_known=False,
+                       airborne_ball_bias='unknown', calibration_method=None, reason=None)
+        if ball.get('state') != 'detected' or ball.get('measurement_xy') is None:
+            quality['reason'] = 'ball_not_measured_this_frame'
+        elif frame.get('image_to_court_h') is None:
+            quality['reason'] = 'calibration_unavailable'
+        else:
+            matrix = np.asarray(frame['image_to_court_h'], float)
+            xy = transform([ball['measurement_xy']], matrix)[0]
+            quality['calibration_method'] = frame.get('calibration', {}).get('method')
+            if not np.isfinite(xy).all():
+                quality['reason'] = 'nonfinite_floor_ray_intersection'
+            elif not (0 <= xy[0] <= COURT['length_m'] and 0 <= xy[1] <= COURT['width_m']):
+                quality['reason'] = 'floor_ray_intersection_outside_court'
+                quality['unclipped_floor_ray_xy_m'] = xy.tolist()
+            else:
+                frame['ball_minimap_floor_ray_xy_m'] = xy.tolist()
+                frame['ball_minimap_projection_source'] = 'measured_ball_floor_ray_intersection'
+                projected += 1
+        frame['ball_minimap_projection_quality'] = quality
+    return projected
+
+
+def smooth_ball_floor_ray_projections(frames, fps, measurement_sigma=.18,
+                                      acceleration_sigma=18.):
+    """Stabilize contiguous measured floor-ray intersections without gap fill."""
+    segments, active = [], None
+    previous_segment = previous_shot = None
+    for frame in frames:
+        raw = frame.get('ball_minimap_floor_ray_xy_m')
+        frame['ball_minimap_floor_ray_raw_xy_m'] = list(raw) if raw is not None else None
+        frame['ball_minimap_floor_ray_filter'] = None
+        ball_segment = frame['ball_temporal'].get('segment_id')
+        shot = frame.get('calibration', {}).get('shot')
+        if (raw is None or active is None or ball_segment != previous_segment or
+                shot != previous_shot or frame['frame_idx'] != active[-1][0]+1):
+            active = None
+        if raw is not None:
+            if active is None:
+                active = []
+                segments.append(active)
+            active.append((frame['frame_idx'], frame))
+        previous_segment, previous_shot = ball_segment, shot
+    for segment in segments:
+        points = np.asarray([frame['ball_minimap_floor_ray_raw_xy_m'] for _, frame in segment], float)
+        variance_scale = np.ones(len(points), float)
+        if len(points) >= 3:
+            prediction = (points[:-2]+points[2:])/2
+            residual = np.linalg.norm(points[1:-1]-prediction, axis=1)
+            variance_scale[1:-1] = np.clip(1+(residual/.25)**2, 1, 100)
+        filtered = kalman_rts(points, fps, measurement_sigma=measurement_sigma,
+                              acceleration_sigma=acceleration_sigma,
+                              variance_scale=variance_scale)
+        for (_, frame), point, scale in zip(segment, filtered, variance_scale):
+            frame['ball_minimap_floor_ray_xy_m'] = (point.tolist() if
+                0 <= point[0] <= COURT['length_m'] and 0 <= point[1] <= COURT['width_m'] else None)
+            frame['ball_minimap_floor_ray_filter'] = dict(
+                method='robust_kalman_rts_observed_floor_ray_segment',
+                segment_observations=len(segment), measurement_variance_scale=float(scale),
+                raw_floor_ray_preserved=True, gaps_filled=False,
+                offline_future_frames_used=True)
+    return sum(frame.get('ball_minimap_floor_ray_xy_m') is not None for frame in frames)
+
+
+def _dashed_line(image,start,end,color,thickness=2,dash=6,gap=4):
+    vector=np.asarray(end,float)-np.asarray(start,float)
+    length=float(np.linalg.norm(vector))
+    if length < 1:
+        return
+    unit=vector/length
+    offset=0.
+    while offset < length:
+        a=np.asarray(start)+unit*offset
+        b=np.asarray(start)+unit*min(length,offset+dash)
+        cv2.line(image,tuple(np.rint(a).astype(int)),tuple(np.rint(b).astype(int)),
+                 color,thickness,cv2.LINE_AA)
+        offset += dash+gap
+
+
 def render_combined(image, frame, lines=None, player_presentation='clean'):
     # Clean presentation only; raw/inferred distinctions remain in machine-readable data.
     panel=None
@@ -190,11 +285,40 @@ def render_combined(image, frame, lines=None, player_presentation='clean'):
         view=dict(frame,tracks=[dict(row,draw_detection_box_fallback=False) for row in frame['tracks']])
         out=render(image,view,lines or floor_lines(COURT),color_mode='team')
         panel=out[10:200,10:314].copy()
+        # Replace the inherited ball/controller footer with the exact semantics
+        # of this fusion presentation while retaining a compact team legend.
+        cv2.rectangle(panel,(0,151),(303,189),(30,40,16),-1)
+        text(panel,'orange = conservative pass*',(5,158),.22,(20,160,255))
+        text(panel,'yellow dash = tentative pass*',(5,166),.22,(0,220,255))
+        text(panel,'green ring = estimated controller',(5,174),.22,(80,255,140))
+        for x,label,color in ((8,'A',(230,155,65)),(62,'B',(70,175,245)),
+                              (116,'Ref',(230,120,230)),(190,'?',(170,170,170))):
+            cv2.circle(panel,(x,183),3,color,-1,cv2.LINE_AA)
+            text(panel,label,(x+6,187),.25,color)
         xy=frame['possession'].get('minimap_xy_m')
         if xy is not None:
             point=tuple(np.rint(np.asarray(xy)*9.6+np.array([17,29])).astype(int))
             cv2.circle(panel,point,8,(0,0,0),4,cv2.LINE_AA)
             cv2.circle(panel,point,7,(80,255,140),2,cv2.LINE_AA)
+        event=frame.get('pass_event')
+        if event is not None:
+            start=np.asarray(event['start_xy_m'])*9.6+np.array([17,29])
+            end=np.asarray(event['end_xy_m'])*9.6+np.array([17,29])
+            progress=float(event['progress'])
+            current=start+(end-start)*progress
+            start_point=tuple(np.rint(start).astype(int));end_point=tuple(np.rint(end).astype(int))
+            current_point=tuple(np.rint(current).astype(int))
+            cv2.line(panel,start_point,end_point,(70,80,90),1,cv2.LINE_AA)
+            tentative=event.get('confidence')=='tentative'
+            color=(0,220,255) if tentative else (0,165,255)
+            if tentative:
+                _dashed_line(panel,start_point,current_point,(0,0,0),4)
+                _dashed_line(panel,start_point,current_point,color,2)
+            else:
+                cv2.arrowedLine(panel,start_point,current_point,(0,0,0),4,cv2.LINE_AA,tipLength=.12)
+                cv2.arrowedLine(panel,start_point,current_point,color,2,cv2.LINE_AA,tipLength=.12)
+            cv2.circle(panel,current_point,5,(0,0,0),-1,cv2.LINE_AA)
+            cv2.circle(panel,current_point,3,color,-1,cv2.LINE_AA)
     else:
         out=cv2.resize(image,(1280,720))
     sx,sy=1280/image.shape[1],720/image.shape[0]
@@ -271,7 +395,12 @@ def flat_frame(frame):
                 control_support_measurements=control.get('support_measurements'),
                 raw_controller_person_id=frame.get('possession_raw',control)['controller_person_id'],
                 owner_box_observed=control.get('current_player_box_observed',True),
-                controller_floor_xy_m=control['minimap_xy_m'])
+                controller_floor_xy_m=control['minimap_xy_m'],
+                pass_event_id=(frame.get('pass_event') or {}).get('event_id'),
+                pass_phase=(frame.get('pass_event') or {}).get('phase'),
+                pass_progress=(frame.get('pass_event') or {}).get('progress'),
+                pass_source_player_id=(frame.get('pass_event') or {}).get('source_player_id'),
+                pass_target_player_id=(frame.get('pass_event') or {}).get('target_player_id'))
 
 
 def run(args):
@@ -300,7 +429,7 @@ def run(args):
                   pose_provenance=pose_manifest,
                   control_smoothing=asdict(smoothing_config) if args.smooth_control else None,
                   presentation=dict(style='assigned_box_and_ball_trail',player_presentation=args.player_presentation,
-                                    minimap_marker='estimated_controller_floor_position_only',ball_trail_s=args.ball_trail_s,
+                                    minimap_marker='estimated controller plus inferred pass endpoints',ball_trail_s=args.ball_trail_s,
                                     uniform_inferred_and_measured_style=True,raw_candidates_visible=False),
                   versions={p:importlib.metadata.version(p) for p in ('numpy','opencv-python','scipy','imageio-ffmpeg')},
                   limitations=[
@@ -308,7 +437,7 @@ def run(args):
                       'Only accepted ball measurements establish/change control. Brief inferred continuity is labelled separately.',
                       'Silhouette distance, relative-motion limits and temporal windows are development heuristics, not hand-contact evidence.',
                       'Incorrect accepted ball/player detections, roles and identity links can produce wrong control.',
-                      'No airborne ball homography is applied; map ring is the estimated controller floor position.',
+                      'No airborne ball homography is applied; pass paths interpolate verified controller endpoints.',
                       'Historical Colab exports have no source-video hash; coordinate/frame alignment is checked.',
                       'Player identities, automatic classes, segmentation and calibration are inherited unchanged.',
                       'Player tracker/ReID/GMC are inherited from the automatic source; ball GMC/ReID are disabled.',
@@ -329,6 +458,8 @@ def run(args):
                 frames,smoothing=smooth_control_gaps(frames,info['fps'],smoothing_config)
                 write_json(target/'control_smoothing.json',smoothing)
             add_ball_trails(frames,info,args.ball_trail_s)
+            pass_audit=infer_pass_events(frames,info['fps'],PassConfig())
+            write_json(target/'pass_events.json',pass_audit)
             assert all(player_camera_data_preserved(original,frame)
                        for original,frame in zip(people,frames)), 'Original player/camera data changed'
             with (target/'frames.jsonl').open('w',encoding='utf8') as stream:
@@ -338,6 +469,7 @@ def run(args):
                 writer=csv.DictWriter(stream,fieldnames=list(flat[0]));writer.writeheader();writer.writerows(flat)
             decoded=encode(video,frames,target,info,args.player_presentation)
             counts=dict(ball_states=dict(Counter(f['ball_temporal']['state'] for f in frames)),
+                        pass_events=pass_audit['accepted_events'],
                         control_states=dict(Counter(f['possession']['status'] for f in frames)),
                         unknown_reasons=dict(Counter(f['possession']['reason'] for f in frames
                                                      if f['possession']['status']=='unknown')),

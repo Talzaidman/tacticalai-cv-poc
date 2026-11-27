@@ -59,6 +59,17 @@ class FloorDisplayTests(unittest.TestCase):
         self.assertEqual(observation_color(dict(role=None,team_id=None,player_id='7'),'team'), (170,170,170))
         self.assertNotEqual(observation_color(dict(role='referee',team_id=None,player_id='7'),'team'), TEAM_COLORS['A'])
 
+    def test_renderer_prefers_display_only_smoothed_minimap_point(self):
+        row = dict(player_id='1', role='player', team_id='A', silhouette_xy=None,
+                   bbox_xyxy=[500,350,550,450], court_xy_m=[2, 2],
+                   minimap_xy_m=[8, 6], court_region='inside', display_label='1', track_id=1)
+        out = render(np.zeros((720,1280,3),np.uint8),
+                     dict(tracks=[row], calibration=dict(method='smoothed')), [], color_mode='team')
+        raw = np.rint(np.asarray(row['court_xy_m'])*9.6+[17,29]).astype(int)+[10,10]
+        stable = np.rint(np.asarray(row['minimap_xy_m'])*9.6+[17,29]).astype(int)+[10,10]
+        self.assertFalse(np.array_equal(out[raw[1], raw[0]], TEAM_COLORS['A']))
+        np.testing.assert_array_equal(out[stable[1], stable[0]], TEAM_COLORS['A'])
+
 
 if __name__ == '__main__':
     unittest.main()

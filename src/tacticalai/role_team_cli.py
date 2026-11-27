@@ -170,9 +170,10 @@ def person_summaries(frames, decisions, fps):
     return results
 
 
-def render_video(video, frames, lines, target, fps, color_mode='identity'):
+def render_video(video, frames, lines, target, fps, color_mode='team'):
     import imageio_ffmpeg
-    # Reuse the identity-color renderer; captions carry the automatic roles/teams.
+    # Anonymous automatic groups share a stable palette; captions still retain
+    # player/track labels so teammates remain distinguishable.
     cap = cv2.VideoCapture(str(video))
     process = subprocess.Popen([imageio_ffmpeg.get_ffmpeg_exe(), '-v', 'error', '-y',
         '-f', 'rawvideo', '-pix_fmt', 'bgr24', '-s', '1280x720', '-r', str(fps), '-i', 'pipe:0',

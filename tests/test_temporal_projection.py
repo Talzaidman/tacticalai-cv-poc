@@ -2,7 +2,8 @@ import unittest
 
 import numpy as np
 
-from tacticalai.temporal_projection import kalman_rts, image_probes, smooth_cameras, smooth_players
+from tacticalai.temporal_projection import (kalman_rts, image_probes, smooth_cameras,
+                                             smooth_minimap_positions, smooth_players)
 from tacticalai.calibration import transform
 
 
@@ -61,6 +62,30 @@ class TemporalProjectionTests(unittest.TestCase):
         self.assertEqual(frames[4]['tracks'][0]['court_xy_m'],[20,2])
         self.assertEqual(frames[5]['tracks'][0]['track_id'],2)
         self.assertNotIn('position_temporal_filter',frames[6]['tracks'][0])
+
+    def test_minimap_smoothing_preserves_raw_points_gaps_and_group_fields(self):
+        rng = np.random.default_rng(12)
+        frames = []
+        for index in range(20):
+            point = [2+index*.08+rng.normal(0, .12), 5+rng.normal(0, .12)]
+            row = dict(track_id=7, player_id='p7', identity_segment_id='segment-7',
+                       role='player', team_id='A', court_xy_m=point, court_region='inside')
+            frames.append(dict(tracks=[] if index == 10 else [row]))
+        original = [f['tracks'][0]['court_xy_m'][:] if f['tracks'] else None for f in frames]
+        smooth_minimap_positions(frames, 25, [True]+[False]*19)
+        self.assertEqual(frames[10]['tracks'], [])
+        for before, frame in zip(original, frames):
+            if before is None:
+                continue
+            row = frame['tracks'][0]
+            self.assertEqual(row['court_xy_m'], before)
+            self.assertEqual(row['minimap_xy_raw_m'], before)
+            self.assertEqual(row['team_id'], 'A')
+            self.assertIsNotNone(row['minimap_xy_m'])
+        raw = np.asarray([original[i] for i in range(10)])
+        stable = np.asarray([frames[i]['tracks'][0]['minimap_xy_m'] for i in range(10)])
+        self.assertLess(np.median(np.linalg.norm(np.diff(stable, n=2, axis=0), axis=1)),
+                        np.median(np.linalg.norm(np.diff(raw, n=2, axis=0), axis=1)))
 
 
 if __name__ == '__main__':

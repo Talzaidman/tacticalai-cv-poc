@@ -167,6 +167,74 @@ def smooth_players(frames, fps, cuts, identity_field=None, role_filter='player')
                                                   segment_observations=len(segment), offline_future_frames_used=True)
 
 
+def smooth_minimap_positions(frames, fps, cuts, measurement_sigma=.12,
+                             acceleration_sigma=10.):
+    """Create display-only stable floor points without changing measurements.
+
+    Rows remain strictly observation-backed: gaps, cuts and identity changes end a
+    segment and no missing row is synthesized.  A local linear residual only
+    increases measurement variance for isolated projection impulses; it does not
+    delete the source point.  ``court_xy_m`` is retained as the raw evidence.
+    """
+    if len(frames) != len(cuts):
+        raise ValueError('Frame/cut count mismatch')
+    segments = []
+    active = {}
+    for index, frame in enumerate(frames):
+        next_active = {}
+        for row in frame['tracks']:
+            row['minimap_xy_raw_m'] = (list(row['court_xy_m'])
+                                       if row.get('court_xy_m') is not None else None)
+            row['minimap_xy_m'] = None
+            row['minimap_position_filter'] = None
+            point = row.get('court_xy_m')
+            if point is None or row.get('court_region') != 'inside':
+                continue
+            identity = (row.get('identity_segment_id') or row.get('player_id') or
+                        (f"track:{row['track_id']}" if row.get('track_id') is not None else None))
+            if identity is None:
+                continue
+            key = (str(identity), row.get('role'), row.get('team_id'))
+            segment = active.get(key)
+            if segment is not None and not cuts[index]:
+                previous = np.asarray(segment[-1][1]['court_xy_m'], float)
+                # A displacement this large is more likely a reassociation or a
+                # projection discontinuity than one continuous player motion.
+                if np.linalg.norm(np.asarray(point, float)-previous) > .6+12/fps:
+                    segment = None
+            else:
+                segment = None
+            if segment is None:
+                segment = []
+                segments.append(segment)
+            segment.append((index, row))
+            next_active[key] = segment
+        active = next_active
+
+    for segment in segments:
+        points = np.asarray([row['court_xy_m'] for _, row in segment], float)
+        variance_scale = np.ones(len(points), float)
+        if len(points) >= 3:
+            prediction = (points[:-2]+points[2:])/2
+            residual = np.linalg.norm(points[1:-1]-prediction, axis=1)
+            # Downweight isolated bbox/homography impulses smoothly. Sustained
+            # direction changes remain supported by adjacent observations.
+            variance_scale[1:-1] = np.clip(1+(residual/.20)**2, 1, 100)
+        filtered = kalman_rts(points, fps, measurement_sigma=measurement_sigma,
+                              acceleration_sigma=acceleration_sigma,
+                              variance_scale=variance_scale)
+        for (_, row), point, scale in zip(segment, filtered, variance_scale):
+            inside = 0 <= point[0] <= 28 and 0 <= point[1] <= 15
+            row['minimap_xy_m'] = point.tolist() if inside else None
+            row['minimap_position_filter'] = dict(
+                method='robust_kalman_rts_observed_identity_segment',
+                segment_observations=len(segment),
+                measurement_variance_scale=float(scale),
+                offline_future_frames_used=True,
+                raw_court_position_preserved=True)
+    return frames
+
+
 def roughness(points):
     """Second-difference displacement proxy, not acceleration/accuracy ground truth."""
     points = np.asarray(points, float)

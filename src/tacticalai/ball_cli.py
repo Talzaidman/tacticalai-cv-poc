@@ -22,6 +22,7 @@ from .calibration_cli import video_info
 from .court import floor_lines
 from .export import json_default, sha256, write_json
 from .silhouette_presentation import render
+from .temporal_projection import smooth_minimap_positions
 from .video_set import LEGACY_CLIPS, resolve_clips
 
 
@@ -172,6 +173,65 @@ def flat_ball(clip, frame):
         marker_position_source=possession['minimap_position_source'])
 
 
+def stabilize_minimap(frames, fps):
+    """Smooth observed map dots and keep controller rings on the same dot."""
+    cuts = []
+    previous_shot = None
+    for index, frame in enumerate(frames):
+        shot = frame.get('calibration', {}).get('shot')
+        cuts.append(bool(frame.get('ball_camera_cut_reset')) or index == 0 or
+                    (index > 0 and shot is not None and shot != previous_shot))
+        previous_shot = shot
+    smooth_minimap_positions(frames, fps, np.asarray(cuts, bool))
+    for frame in frames:
+        possession = frame.get('possession')
+        if not possession or possession.get('minimap_xy_m') is None:
+            continue
+        identity = possession.get('controller_identity_segment_id')
+        person = possession.get('controller_person_id')
+        track = possession.get('controller_track_id')
+        matches = [row for row in frame['tracks'] if
+                   (identity is not None and row.get('identity_segment_id') == identity) or
+                   (identity is None and person is not None and row.get('player_id') == person) or
+                   (identity is None and person is None and track is not None and row.get('track_id') == track)]
+        if len(matches) == 1 and matches[0].get('minimap_xy_m') is not None:
+            possession['minimap_xy_m'] = list(matches[0]['minimap_xy_m'])
+            possession['minimap_position_source'] = 'smoothed_estimated_controller_floor_position'
+    return frames
+
+
+def minimap_smoothing_summary(frames):
+    """Matched-observation smoothness proxy; explicitly not position accuracy."""
+    sequences = {}
+    for frame in frames:
+        for row in frame['tracks']:
+            if row.get('minimap_xy_m') is None:
+                continue
+            identity = (row.get('identity_segment_id') or row.get('player_id') or
+                        (f"track:{row['track_id']}" if row.get('track_id') is not None else None))
+            if identity is not None:
+                sequences.setdefault(str(identity), []).append(
+                    (frame['frame_idx'], row['minimap_xy_raw_m'], row['minimap_xy_m']))
+    raw, stable = [], []
+    for values in sequences.values():
+        for first, middle, last in zip(values, values[1:], values[2:]):
+            if middle[0] != first[0]+1 or last[0] != middle[0]+1:
+                continue
+            raw.append(float(np.linalg.norm(np.asarray(first[1])-2*np.asarray(middle[1])+
+                                            np.asarray(last[1]))))
+            stable.append(float(np.linalg.norm(np.asarray(first[2])-2*np.asarray(middle[2])+
+                                               np.asarray(last[2]))))
+    raw_median = float(np.median(raw)) if raw else None
+    stable_median = float(np.median(stable)) if stable else None
+    reduction = (100*(1-stable_median/raw_median)
+                 if raw_median not in (None, 0) and stable_median is not None else None)
+    return dict(observed_smoothed_rows=sum(len(v) for v in sequences.values()),
+                matched_observed_triples=len(raw), raw_median_second_difference_m=raw_median,
+                smoothed_median_second_difference_m=stable_median,
+                median_roughness_reduction_percent=reduction,
+                metric_is_smoothness_not_accuracy=True)
+
+
 def encode(video, frames, target, info):
     import imageio_ffmpeg
     cap = cv2.VideoCapture(str(video))
@@ -229,16 +289,32 @@ def rerender(args):
             frames, provenance = load_source(args.source, clip, info)
             if any('ball' not in frame or 'possession' not in frame for frame in frames):
                 raise ValueError('Re-render source is missing ball/possession results')
+            stabilize_minimap(frames, info['fps'])
             target = args.output/clip
             target.mkdir()
-            shutil.copyfile(args.source/clip/'frames.jsonl', target/'frames.jsonl')
+            with (target/'frames.jsonl').open('w', encoding='utf8') as stream:
+                for frame in frames:
+                    stream.write(json.dumps(frame, allow_nan=False, default=json_default)+'\n')
             meta = json.loads((args.source/clip/'metadata.json').read_text(encoding='utf8'))
             csv_path = args.source/clip/'ball.csv'
-            if sha256(csv_path) != meta['artifacts_sha256']['ball.csv']:
-                raise ValueError('Source ball CSV hash differs')
-            shutil.copyfile(csv_path, target/'ball.csv')
+            if csv_path.exists():
+                if sha256(csv_path) != meta['artifacts_sha256']['ball.csv']:
+                    raise ValueError('Source ball CSV hash differs')
+                shutil.copyfile(csv_path, target/'ball.csv')
+                ball_csv_source = 'hash_verified_source'
+            else:
+                flat = [flat_ball(clip, frame) for frame in frames]
+                with (target/'ball.csv').open('w', newline='', encoding='utf8') as stream:
+                    writer = csv.DictWriter(stream, fieldnames=list(flat[0]))
+                    writer.writeheader()
+                    writer.writerows(flat)
+                ball_csv_source = 'regenerated_from_hash_verified_frames'
             decoded = encode(video, frames, target, info)
             result = dict(status='complete', video=info, source=provenance,
+                minimap_smoothing=dict(method='robust Kalman/RTS', display_only=True,
+                    raw_court_xy_preserved=True, gaps_filled=False, offline_future_frames_used=True,
+                    diagnostics=minimap_smoothing_summary(frames)),
+                ball_csv_source=ball_csv_source,
                 counts=meta['counts'], annotated_frames_decoded=decoded,
                 artifacts_sha256={p.name: sha256(p) for p in target.iterdir() if p.is_file()})
             write_json(target/'metadata.json', result)
@@ -252,7 +328,7 @@ def rerender(args):
                     f'src="{clip}/annotated.mp4"></video>' for clip, _ in clip_videos)+'</body></html>', encoding='utf8')
         snapshots = args.output/'run_source'
         snapshots.mkdir()
-        for name in ('ball_cli.py', 'silhouette_presentation.py'):
+        for name in ('ball_cli.py', 'silhouette_presentation.py', 'temporal_projection.py'):
             shutil.copyfile(Path(__file__).with_name(name), snapshots/name)
         report.update(status='complete', source_sha256={p.name: sha256(p) for p in snapshots.iterdir()})
         write_json(args.output/'experiment.json', report)
@@ -320,7 +396,7 @@ def run(args):
         report['court_assets'] = assets
         snapshots = args.output/'run_source'
         snapshots.mkdir()
-        for name in ('ball.py', 'ball_cli.py', 'silhouette_presentation.py', 'calibration.py',
+        for name in ('ball.py', 'ball_cli.py', 'silhouette_presentation.py', 'temporal_projection.py', 'calibration.py',
                      'auto_calibration.py', 'kalicalib_reference.py', 'court.py', 'export.py'):
             shutil.copyfile(Path(__file__).with_name(name), snapshots/name)
         report['source_sha256'] = {p.name: sha256(p) for p in snapshots.iterdir()}
@@ -405,6 +481,7 @@ def run(args):
                     raise ValueError('Source contains extra frames')
             finally:
                 cap.release()
+            stabilize_minimap(frames, info['fps'])
             with (target/'frames.jsonl').open('w', encoding='utf8') as stream:
                 for frame in frames:
                     stream.write(json.dumps(frame, allow_nan=False, default=json_default)+'\n')
@@ -430,8 +507,11 @@ def run(args):
             if cached is not None:
                 for before, after in zip(cached, frames):
                     if any(after[k] != v for k, v in before.items() if k not in
-                           ('ball', 'possession', 'ball_raw_detections', 'ball_camera_cut_reset')):
+                           ('ball', 'possession', 'ball_raw_detections', 'ball_camera_cut_reset', 'tracks')):
                         raise ValueError('Original person/camera observation changed')
+                    for raw_row, output_row in zip(before['tracks'], after['tracks']):
+                        if any(output_row.get(k) != v for k, v in raw_row.items()):
+                            raise ValueError('Original person/camera observation changed')
             start = time.perf_counter()
             decoded = encode(video, frames, target, info)
             shutil.copyfile(target/'annotated.mp4', target/'clean.mp4')
@@ -441,6 +521,9 @@ def run(args):
                           minimap_marker_frames=sum(f['possession']['minimap_xy_m'] is not None for f in frames),
                           calibrated_frames=sum(f['image_to_court_h'] is not None for f in frames))
             meta = dict(status='complete', video=info, source=provenance,
+                minimap_smoothing=dict(method='robust Kalman/RTS', display_only=True,
+                    raw_court_xy_preserved=True, gaps_filled=False, offline_future_frames_used=True,
+                    diagnostics=minimap_smoothing_summary(frames)),
                 person_source='existing_automatic_cache' if cached is not None else f'fresh_{args.person_tracker}',
                 person_tracker=tracker_config, person_reid=args.person_reid if cached is None else 'inherited_from_source',
                 person_gmc='sparseOptFlow' if cached is None else 'inherited_from_source',

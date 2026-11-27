@@ -14,6 +14,7 @@ clip-reident = ["open-clip-torch==2.0.2", "gdown==5.2.0"]
 preview = ["imageio-ffmpeg==0.6.0"]
 geometry = ["scipy==1.18.1"]
 roles = ["open-clip-torch==2.0.2", "imageio-ffmpeg==0.6.0", "scipy==1.18.1"]
+rim-probe = ["clip @ git+https://github.com/ultralytics/CLIP.git@7ffa84b3bfa40c42ecc1c77147a855e69cb2dd40"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
