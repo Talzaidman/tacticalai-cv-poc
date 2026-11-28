@@ -4,12 +4,14 @@ Original videos are copied without modification; nothing is uploaded.
 #>
 [CmdletBinding()]
 param(
-    [string[]]$Videos = @('data/raw/attack_clip.mp4', 'data/raw/attack_clip2.mp4')
+    [string[]]$Videos = @('data/raw/attack_clip.mp4', 'data/raw/attack_clip2.mp4'),
+    [ValidatePattern('^[a-zA-Z0-9.-]+\.zip$')]
+    [string]$ArchiveName = 'tacticalai-source.zip'
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$archivePath = Join-Path $projectRoot 'tacticalai-source.zip'
+$archivePath = Join-Path $projectRoot $ArchiveName
 $uploadRoot = Join-Path $projectRoot 'outputs/colab-upload/TacticalAI'
 $codeDirectory = Join-Path $uploadRoot 'code'
 $videoDirectory = Join-Path $uploadRoot 'data/raw'
@@ -35,9 +37,28 @@ $archive = [System.IO.Compression.ZipFile]::Open($temporaryArchive, [System.IO.C
 try {
     foreach ($file in $packageFiles) {
         $entryName = $file.FullName.Substring($projectRoot.Length + 1).Replace('\', '/')
-        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-            $archive, $file.FullName, $entryName,
-            [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+        if ($file.Extension -eq '.ipynb') {
+            # Executed notebooks can contain footage and runtime output inline.
+            $notebook = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json -AsHashtable
+            foreach ($cell in $notebook.cells) {
+                if ($cell.cell_type -eq 'code') {
+                    $cell.outputs = @()
+                    $cell.execution_count = $null
+                }
+            }
+            $notebook.metadata.Remove('widgets') | Out-Null
+            $entry = $archive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+            $writer = [System.IO.StreamWriter]::new($entry.Open())
+            try {
+                $writer.Write(($notebook | ConvertTo-Json -Depth 100 -Compress))
+            } finally {
+                $writer.Dispose()
+            }
+        } else {
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $archive, $file.FullName, $entryName,
+                [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+        }
     }
 } finally {
     $archive.Dispose()
@@ -57,7 +78,7 @@ try {
 }
 Move-Item -LiteralPath $temporaryArchive -Destination $archivePath -Force
 New-Item -ItemType Directory -Path $codeDirectory, $videoDirectory -Force | Out-Null
-Copy-Item -LiteralPath $archivePath -Destination (Join-Path $codeDirectory 'tacticalai-source.zip') -Force
+Copy-Item -LiteralPath $archivePath -Destination (Join-Path $codeDirectory $ArchiveName) -Force
 
 $manifest = @(
     foreach ($relativePath in $Videos) {
@@ -79,7 +100,7 @@ $manifest = @(
         }
     }
     [pscustomobject]@{
-        file = 'code/tacticalai-source.zip'
+        file = "code/$ArchiveName"
         sha256 = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash
         bytes = (Get-Item -LiteralPath $archivePath).Length
     }

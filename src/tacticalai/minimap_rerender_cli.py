@@ -65,6 +65,12 @@ def run(source, videos, clips, output, source_url=None):
             diagnostics = minimap_smoothing_summary(frames)
             target = output/clip
             target.mkdir()
+            shot_audit_path = source_folder/'shot_events.json'
+            shot_audit_hash = metadata.get('artifacts_sha256', {}).get(shot_audit_path.name)
+            if shot_audit_hash is not None:
+                if sha256(shot_audit_path) != shot_audit_hash:
+                    raise ValueError('Source shot audit hash differs from completed metadata')
+                shutil.copyfile(shot_audit_path, target/shot_audit_path.name)
             with (target/'frames.jsonl').open('w', encoding='utf8') as stream:
                 for frame in frames:
                     stream.write(json.dumps(frame, allow_nan=False)+'\n')
@@ -98,14 +104,14 @@ def run(source, videos, clips, output, source_url=None):
             report['clips'][clip] = result
             write_json(output/'experiment.json', report)
         snapshots = output/'run_source'; snapshots.mkdir()
-        for name in ('minimap_rerender_cli.py', 'ball_fusion_cli.py', 'pass_events.py', 'ball_cli.py',
-                     'silhouette_presentation.py', 'temporal_projection.py'):
+        for name in ('minimap_rerender_cli.py', 'ball_fusion_cli.py', 'pass_events.py', 'shot_events.py',
+                     'ball_cli.py', 'silhouette_presentation.py', 'temporal_projection.py'):
             shutil.copyfile(Path(__file__).with_name(name), snapshots/name)
         (output/'index.html').write_text(
             '<!doctype html><meta charset="utf-8"><title>Stable team minimap</title>'
             '<body style="margin:20px;background:#111;color:#eee;font:16px Arial">'
             '<p>Automatic anonymous teams; offline display-only minimap smoothing and inferred passes. '
-            'Pass lines connect controller endpoints and are not measured airborne trajectories.</p>'+''.join(
+            'Pass and shot lines show inferred endpoints.</p>'+''.join(
                 f'<h2>{clip}</h2><video controls preload="metadata" style="width:min(100%,1100px)" '
                 f'src="{clip}/annotated.mp4"></video>' for clip, _ in resolve_clips(videos, clips))+
             '</body>', encoding='utf8')

@@ -7,6 +7,9 @@ Line-centre approximations ignore the 5 cm paint thickness in this POC.
 import numpy as np
 
 
+BASKET_OFFSET_M = 1.575
+
+
 def landmarks(court):
     length, width = court["length_m"], court["width_m"]
     depth, lane = court["key_depth_m"], court["key_width_m"]
@@ -40,7 +43,7 @@ def floor_lines(court):
     for base, free in ((0, depth), (length, length-depth)):
         lines.append([[base, low], [free, low], [free, high], [base, high]])
     corner = court.get("three_point_corner_offset_m", .9)
-    radius, basket_offset = 6.75, 1.575
+    radius, basket_offset = 6.75, BASKET_OFFSET_M
     angle = np.arcsin((width/2-corner)/radius)
     theta = np.linspace(-angle, angle, 121)
     arc = np.column_stack((basket_offset+radius*np.cos(theta), width/2+radius*np.sin(theta)))

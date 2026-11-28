@@ -21,38 +21,72 @@ Outputs persist under `MyDrive/TacticalAI/outputs/unified-<clip>-<timestamp>/`.
 Stages: TrackTrack person tracking with ReID and sparse-optical-flow GMC, automatic
 KaliCalib court estimation, visible-person court projection, segmentation silhouettes,
 automatic role/team hypotheses, SAM 3 basketball detection/tracking, wrist-aware
-holder estimation, and one final annotated MP4 plus JSONL/CSV/runtime metadata.
+holder estimation, sparse SAM 3 hoop and backboard detection with full-rate
+refinement around possible shots, and one final
+annotated MP4 with inferred passes and shots plus JSONL/CSV/runtime metadata.
+`basket_hardware` in `frames.jsonl`
+holds measured image-space boxes and clip-local, same-class track IDs.
+`basket_hardware_sampled` indicates whether SAM 3 was run on a frame.
+IDs can restart after missed frames.
 Unknown measurements remain null.
 
 Ball holder/controller is a temporal wrist/body-proximity estimate, not verified
 possession. Only observed SAM 3 ball measurements can establish or change a holder.
 Airborne ball image coordinates are never projected through the floor homography.
 Track IDs/person hypotheses are not verified roster identities.
+Dashed magenta lines connect an inferred shooter to the matched basket on the
+mini-map. `shot_events.json` records possible hoop/backboard contacts, last-holder
+evidence and unknowns. Contact and shooter are inferred offline, and outcome is unknown.
 """),
     cell("code", r"""
 from google.colab import drive, userdata
 from pathlib import Path
 from datetime import datetime
-import json, os, shutil, subprocess, sys
+import json, os, shutil, subprocess, sys, zipfile
 
 drive.mount('/content/drive')
 ROOT = Path('/content/drive/MyDrive/TacticalAI')
 VIDEO_ROOT = ROOT / 'data/raw'
-CLIP_NAME = 'galil_elion_offense_30s'  # Change this to the filename stem for another video in data/raw.
+CLIP_NAME = 'attack_clip2'  # Validate on this 7-second clip, then switch to 'galil_elion_offense_30s'.
+SHOT_MAX_HOLDER_AGE_S = 1.25  # Seconds from last measured control to possible basket contact.
+HOOP_STRIDE = 5  # Use 1 for the full-rate boxes-only reference.
 VIDEO = VIDEO_ROOT / f'{CLIP_NAME}.mp4'
-ARCHIVE = ROOT / 'code/tacticalai-source.zip'
+ARCHIVE = ROOT / 'code/tacticalai-source-adaptive-hoop.zip'
 MODEL_ROOT = ROOT / 'models'
 assert VIDEO.is_file(), VIDEO
-assert ARCHIVE.is_file(), ARCHIVE
+
+required_source = {f'src/tacticalai/{name}'
+                   for name in ('sam3_hoop_cli.py', 'hoop_sampling.py', 'hoop_tracking.py', 'shot_events.py')}
+archive_candidates = (ARCHIVE,)
+
+def current_archive():
+    for path in archive_candidates:
+        try:
+            with zipfile.ZipFile(path) as archive:
+                if required_source.issubset(archive.namelist()):
+                    return path
+        except (OSError, zipfile.BadZipFile):
+            continue
+    return None
+
+source_archive = current_archive()
+if source_archive is None:
+    print('Source archive missing or outdated in the current Drive mount. Refreshing the mount.')
+    drive.mount('/content/drive', force_remount=True)
+    source_archive = current_archive()
+if source_archive is None:
+    raise RuntimeError(f'Could not find the adaptive hoop source ZIP at {ARCHIVE}. '
+                       'Check that Colab mounted the Google account containing TacticalAI.')
+print('Using source archive:', source_archive.name)
 
 WORK = Path('/content/tacticalai')
 if WORK.exists(): shutil.rmtree(WORK)
 WORK.mkdir()
-subprocess.run(['unzip', '-q', '-o', str(ARCHIVE), '-d', str(WORK)], check=True)
+subprocess.run(['unzip', '-q', '-o', str(source_archive), '-d', str(WORK)], check=True)
 os.chdir(WORK)
 subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '-r', 'requirements.txt'], check=True)
 subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--no-build-isolation', '-e', '.[roles]'], check=True)
-subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '-U', 'transformers', 'accelerate'], check=True)
+subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'transformers==5.24.1', 'accelerate'], check=True)
 
 import torch, ultralytics
 from ultralytics import YOLO
@@ -77,14 +111,17 @@ def stage_complete(path):
     except (OSError, ValueError):
         return False
 
-# Resume the newest unfinished unified run whose expensive person stages completed.
+# Reuse completed person/ball stages and resume a matching hardware checkpoint.
+HOOP_STAGE = f'sam3-hoop-boxes-stride-{HOOP_STRIDE}'
+FINAL_STAGE = f'06-final-shots-boxes-stride-{HOOP_STRIDE}'
+if SHOT_MAX_HOLDER_AGE_S != 1.25:
+    FINAL_STAGE += f'-holder-{SHOT_MAX_HOLDER_AGE_S}s'
 output_root = ROOT / 'outputs'
 output_root.mkdir(parents=True, exist_ok=True)
-candidates = sorted(output_root.glob(f'unified-{CLIP_NAME}-*'), reverse=True)
-RUN = next((path for path in candidates
-            if stage_complete(path/'01-foundation')
-            and stage_complete(path/'02-segmented')
-            and not stage_complete(path/'06-final')), None)
+candidates = [path for path in sorted(output_root.glob(f'unified-{CLIP_NAME}-*'), reverse=True)
+              if stage_complete(path/'01-foundation') and stage_complete(path/'02-segmented')]
+RUN = next((path for path in candidates if (path/HOOP_STAGE/CLIP_NAME/'experiment.json').is_file()),
+           candidates[0] if candidates else None)
 if RUN is None:
     RUN = output_root / (f'unified-{CLIP_NAME}-' + datetime.now().strftime('%Y%m%d-%H%M%S'))
     RUN.mkdir()
@@ -196,14 +233,41 @@ else:
 print(json.loads((poses/'experiment.json').read_text())['status'])
 """),
     cell("code", r"""
-# Stage 6: combine people, ball and conservative holder estimates into one output.
-final = RUN / '06-final'
+# Detect coarse basket boxes and fill in frames around possible approaches.
+hoop_root = RUN / HOOP_STAGE
+hoop = hoop_root / CLIP_NAME
+if not stage_complete(hoop):
+    cmd = [sys.executable, '-u', '-m', 'tacticalai.sam3_hoop_cli',
+           '--source', str(VIDEO), '--output', str(hoop),
+           '--sample-stride', str(HOOP_STRIDE), '--boxes-only',
+           '--prompts', 'basketball hoop', 'basketball backboard']
+    if HOOP_STRIDE > 1:
+        cmd.extend(['--ball-results', str(sam3_ball)])
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True, encoding='utf-8', errors='replace') as process:
+        try:
+            for line in process.stdout:
+                print(line.replace(HF_TOKEN, '[REDACTED]'), end='', flush=True)
+        except KeyboardInterrupt:
+            process.terminate()
+            raise
+        if process.wait():
+            raise RuntimeError('SAM 3 hardware detection failed. See output above.')
+else:
+    print('Reusing completed SAM 3 hardware detection stage')
+print((hoop/'summary.json').read_text())
+"""),
+    cell("code", r"""
+# Stage 6: combine people, ball, holder estimates and hardware tracks, and infer passes/shots.
+final = RUN / FINAL_STAGE
 if not stage_complete(final):
     if final.exists():
         shutil.rmtree(final)
     result = subprocess.run([sys.executable, '-m', 'tacticalai.ball_fusion_cli',
         '--people-results', str(roles), '--ball-results', str(sam3_ball),
         '--ball-prefix', 'SAM3-Native', '--pose-results', str(poses),
+        '--hoop-results', str(hoop_root),
+        '--shot-max-holder-age-s', str(SHOT_MAX_HOLDER_AGE_S),
         '--videos', str(VIDEO_ROOT), '--clips', CLIP_NAME, '--output', str(final),
         '--association', 'temporal', '--player-presentation', 'silhouettes'],
         text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -219,7 +283,7 @@ print(json.loads((final/'experiment.json').read_text())['status'])
 from IPython.display import Video, display
 clip_output = final/CLIP_NAME
 required = [final/'experiment.json', clip_output/'metadata.json', clip_output/'frames.jsonl',
-            clip_output/'ball_possession.csv', clip_output/'annotated.mp4']
+            clip_output/'ball_possession.csv', clip_output/'annotated.mp4', clip_output/'shot_events.json']
 for path in required:
     assert path.is_file() and path.stat().st_size > 0, path
 manifest = json.loads((final/'experiment.json').read_text())

@@ -27,8 +27,10 @@ from .calibration import transform
 from .calibration_cli import video_info
 from .court import floor_lines
 from .export import sha256, write_json
+from .hoop_tracking import load_hoop_tracks
 from .identity_presentation import text
 from .pass_events import PassConfig, infer_pass_events
+from .shot_events import ShotConfig, infer_shot_events
 from .silhouette_presentation import render
 from .temporal_projection import kalman_rts
 from .video_set import LEGACY_CLIPS, resolve_clips
@@ -36,6 +38,8 @@ from .video_set import LEGACY_CLIPS, resolve_clips
 CLIPS = LEGACY_CLIPS
 COURT = dict(length_m=28., width_m=15., key_depth_m=5.8, key_width_m=4.9)
 DEFAULT_BALL_PREFIX = 'RF-DETR-tiles-Kalman'
+HARDWARE_COLORS = {'hoop': (255, 210, 40), 'backboard': (110, 255, 105)}
+SHOT_COLOR = (245, 120, 245)
 PROTECTED_PEOPLE_FRAME_KEYS = ('frame_idx', 'timestamp_s', 'calibration',
                                'image_to_court_h', 'tracks')
 
@@ -278,6 +282,28 @@ def _dashed_line(image,start,end,color,thickness=2,dash=6,gap=4):
         offset += dash+gap
 
 
+def draw_shot(panel, event):
+    start, end = event['start_xy_m'], event['end_xy_m']
+    if end is not None:
+        target = np.asarray(end)*9.6 + np.array([17, 29])
+        target_point = tuple(np.rint(target).astype(int))
+        cv2.circle(panel, target_point, 6, (0, 0, 0), 3, cv2.LINE_AA)
+        cv2.circle(panel, target_point, 6, SHOT_COLOR, 1, cv2.LINE_AA)
+        if start is not None:
+            origin = np.asarray(start)*9.6 + np.array([17, 29])
+            point = origin+(target-origin)*event['progress']
+            _dashed_line(panel, origin, point, (0, 0, 0), 4)
+            _dashed_line(panel, origin, point, SHOT_COLOR, 2)
+            cv2.circle(panel, tuple(np.rint(point).astype(int)), 3, SHOT_COLOR, -1, cv2.LINE_AA)
+    shooter = event['shooter_player_id']
+    if shooter is not None:
+        label = f"Inferred shot: {str(shooter).rsplit(':', 1)[-1]}"
+    else:
+        hardware = 'Hoop' if event['contact_kind'] == 'hoop' else 'Board'
+        label = f'{hardware} contact? Shooter unknown'
+    text(panel, label, (148, 16), .26, SHOT_COLOR)
+
+
 def render_combined(image, frame, lines=None, player_presentation='clean'):
     # Clean presentation only; raw/inferred distinctions remain in machine-readable data.
     panel=None
@@ -319,9 +345,21 @@ def render_combined(image, frame, lines=None, player_presentation='clean'):
                 cv2.arrowedLine(panel,start_point,current_point,color,2,cv2.LINE_AA,tipLength=.12)
             cv2.circle(panel,current_point,5,(0,0,0),-1,cv2.LINE_AA)
             cv2.circle(panel,current_point,3,color,-1,cv2.LINE_AA)
+        if frame.get('shot_event') is not None:
+            draw_shot(panel, frame['shot_event'])
     else:
         out=cv2.resize(image,(1280,720))
     sx,sy=1280/image.shape[1],720/image.shape[0]
+    for hardware in frame.get('basket_hardware', []):
+        color = HARDWARE_COLORS[hardware['kind']]
+        x1,y1,x2,y2 = np.rint(np.asarray(hardware['bbox_xyxy'])*[sx,sy,sx,sy]).astype(int)
+        cv2.rectangle(out,(x1,y1),(x2,y2),color,2,cv2.LINE_AA)
+        offset = 15 if hardware['kind'] == 'backboard' else 0
+        label = f"{hardware['kind']} #{hardware['track_id']}"
+        label_y = y1-5-offset
+        if label_y < 15:
+            label_y = y2+15+offset
+        text(out,label,(min(x1,1160),min(label_y,710)),.43,color)
     ball,control=frame['ball_temporal'],frame['possession']
     owner=control['controller_person_id']
     if owner is not None:
@@ -357,6 +395,7 @@ def encode(video, frames, folder, info,player_presentation='clean'):
     snapshots = {0,info['frames']//3,2*info['frames']//3,info['frames']-1}
     snapshots.update(f['frame_idx'] for f in frames if f['possession']['status']=='estimated_control'
                      and (f['frame_idx']==0 or frames[f['frame_idx']-1]['possession']['status']!='estimated_control'))
+    snapshots.update(f['frame_idx'] for f in frames if (f.get('shot_event') or {}).get('phase')=='possible_contact')
     lines = floor_lines(COURT)
     try:
         for frame in frames:
@@ -384,6 +423,7 @@ def encode(video, frames, folder, info,player_presentation='clean'):
 def flat_frame(frame):
     ball, control = frame['ball_temporal'], frame['possession']
     measurement = ball.get('measurement_xy') or [None,None]
+    shot = frame.get('shot_event') or {}
     return dict(frame_idx=frame['frame_idx'],timestamp_s=frame['timestamp_s'],
                 ball_state=ball['state'],ball_x=ball['x'],ball_y=ball['y'],
                 measured_x=measurement[0],measured_y=measurement[1],
@@ -400,10 +440,19 @@ def flat_frame(frame):
                 pass_phase=(frame.get('pass_event') or {}).get('phase'),
                 pass_progress=(frame.get('pass_event') or {}).get('progress'),
                 pass_source_player_id=(frame.get('pass_event') or {}).get('source_player_id'),
-                pass_target_player_id=(frame.get('pass_event') or {}).get('target_player_id'))
+                pass_target_player_id=(frame.get('pass_event') or {}).get('target_player_id'),
+                shot_event_id=shot.get('event_id'),shot_phase=shot.get('phase'),shot_progress=shot.get('progress'),
+                shot_shooter_player_id=shot.get('shooter_player_id'),shot_contact_frame=shot.get('contact_frame'),
+                shot_contact_kind=shot.get('contact_kind'),shot_basket_end=shot.get('basket_end'),
+                shot_attribution_reason=shot.get('attribution_reason'))
 
 
 def run(args):
+    hoop_results = getattr(args, 'hoop_results', None)
+    shot_config = ShotConfig()
+    if hoop_results is not None:
+        shot_config = ShotConfig(maximum_holder_age_s=getattr(args, 'shot_max_holder_age_s',
+                                                             shot_config.maximum_holder_age_s))
     config = BallConfig(possession_confirmation_s=args.confirmation_s,
                         possession_min_score=args.min_control_score,
                         possession_margin=args.control_margin)
@@ -437,11 +486,21 @@ def run(args):
                       'Only accepted ball measurements establish/change control. Brief inferred continuity is labelled separately.',
                       'Silhouette distance, relative-motion limits and temporal windows are development heuristics, not hand-contact evidence.',
                       'Incorrect accepted ball/player detections, roles and identity links can produce wrong control.',
-                      'No airborne ball homography is applied; pass paths interpolate verified controller endpoints.',
+                      'Pass paths interpolate estimated controller endpoints. Airborne ball court coordinates remain unknown.',
                       'Historical Colab exports have no source-video hash; coordinate/frame alignment is checked.',
                       'Player identities, automatic classes, segmentation and calibration are inherited unchanged.',
                       'Player tracker/ReID/GMC are inherited from the automatic source; ball GMC/ReID are disabled.',
                       'These development clips and thresholds are not held-out accuracy evaluation.'])
+    if hoop_results is not None:
+        report['hoop_source'] = str(hoop_results.resolve())
+        report['shot_configuration'] = asdict(shot_config)
+        report['presentation']['minimap_marker'] += ' and inferred shot endpoints'
+        report['limitations'].extend([
+            'SAM 3 hardware IDs link nearby same-prompt boxes. IDs can fragment or switch, and extra candidates can persist.',
+            'Adaptive hardware detection can miss shots when the cached ball or coarse basket detections miss the approach.',
+            'Shot candidates use measured image-space box approaches. Overlap can occur without physical contact. Basket outcome remains unknown.',
+            'A recent measured holder is an inferred shooter. Missed players or wrist evidence can still cause wrong attribution.',
+            'Shot lines interpolate from a player floor position to the nominal basket center. Basket side is assigned using approximate camera matching.'])
     write_json(args.output/'experiment.json',report)
     try:
         clip_videos = resolve_clips(args.videos, args.clips)
@@ -458,6 +517,13 @@ def run(args):
                 frames,smoothing=smooth_control_gaps(frames,info['fps'],smoothing_config)
                 write_json(target/'control_smoothing.json',smoothing)
             add_ball_trails(frames,info,args.ball_trail_s)
+            if hoop_results is not None:
+                hardware_frames, hoop_provenance = load_hoop_tracks(hoop_results/clip,video,info,ball_path)
+                for frame, hardware in zip(frames,hardware_frames,strict=True):
+                    frame['basket_hardware_sampled'] = hardware is not None
+                    frame['basket_hardware'] = hardware or []
+                shot_audit = infer_shot_events(frames,info,COURT,shot_config)
+                write_json(target/'shot_events.json',shot_audit)
             pass_audit=infer_pass_events(frames,info['fps'],PassConfig())
             write_json(target/'pass_events.json',pass_audit)
             assert all(player_camera_data_preserved(original,frame)
@@ -481,12 +547,23 @@ def run(args):
                       original_player_observations_preserved=True,annotated_frames_decoded=decoded,
                       counts=counts,processing_s=time.perf_counter()-tick,accuracy_metrics=None,
                       artifacts_sha256={p.name:sha256(p) for p in target.iterdir() if p.is_file()})
+            if hoop_results is not None:
+                meta['hoop_source'] = hoop_provenance
+                counts.update(shot_contact_candidates=shot_audit['contact_candidates'],
+                              attributed_shots=shot_audit['attributed_shots'],
+                              hardware_sampled_frames=sum(hardware is not None for hardware in hardware_frames))
+                counts['hardware_frames_by_kind'] = {
+                    kind: sum(any(row['kind'] == kind for row in (hardware or [])) for hardware in hardware_frames)
+                    for kind in HARDWARE_COLORS}
             write_json(target/'metadata.json',meta);report['clips'][clip]=meta
             write_json(args.output/'experiment.json',report)
             print(clip,counts,flush=True)
         source=args.output/'run_source';source.mkdir()
-        for name in ('ball_fusion_cli.py','ball.py','ball_control.py','control_smoothing.py','pose_cache_cli.py','silhouette_presentation.py'):
+        for name in ('ball_fusion_cli.py','ball.py','ball_control.py','control_smoothing.py','pose_cache_cli.py',
+                     'silhouette_presentation.py','pass_events.py','shot_events.py','court.py'):
             shutil.copyfile(Path(__file__).with_name(name),source/name)
+        if hoop_results is not None:
+            shutil.copyfile(Path(__file__).with_name('hoop_tracking.py'),source/'hoop_tracking.py')
         report.update(status='complete',processing_s=time.perf_counter()-started,
                       source_sha256={p.name:sha256(p) for p in source.iterdir()})
         write_json(args.output/'experiment.json',report)
@@ -508,6 +585,9 @@ def run(args):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ball-results',type=Path,required=True)
+    parser.add_argument('--hoop-results',type=Path,help='Full-rate or adaptive SAM 3 hardware caches by clip stem')
+    parser.add_argument('--shot-max-holder-age-s',type=float,default=ShotConfig().maximum_holder_age_s,
+                        help='Maximum seconds from measured control to possible basket contact')
     parser.add_argument('--ball-prefix',default=DEFAULT_BALL_PREFIX)
     parser.add_argument('--people-results',type=Path,required=True)
     parser.add_argument('--videos',type=Path,default=Path('data/raw'))

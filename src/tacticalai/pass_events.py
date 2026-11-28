@@ -146,6 +146,13 @@ def infer_pass_events(frames, fps, config=PassConfig()):
             continue
         decision=dict(source_player_id=source[2],target_player_id=target[2],
                       release_frame=gap[0],receive_frame=target[0],accepted=False)
+        shot = next((event for index in range(gap[0], target[0]+1)
+                     if (event := frames[index].get('shot_event')) and event['contact_frame'] == index), None)
+        if shot is not None:
+            decision.update(reason='possible_basket_contact_in_pass_interval',
+                            reasons=['possible_basket_contact_in_pass_interval'], shot_event_id=shot['event_id'])
+            decisions.append(decision)
+            continue
         source_count=source[1]-source[0]+1;target_count=target[1]-target[0]+1
         flight_count=gap[1]-gap[0]+1
         violations=[]
